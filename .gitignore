@@ -1,0 +1,8 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+*Zone.Identifier
+.claude/settings.local.json
+memory/logs/
+memory/.obsidian/
