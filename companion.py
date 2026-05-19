@@ -63,7 +63,11 @@ session_logs:        dict[int, list] = {}  # log brut de la session
 # ── GitHub sync ──────────────────────────────────────────────────────────────
 
 def _push_to_github(file_path: Path, content: str):
-    if not GITHUB_TOKEN or not GITHUB_REPO:
+    if not GITHUB_TOKEN:
+        log.warning("GitHub sync ignoré : GITHUB_TOKEN absent.")
+        return
+    if not GITHUB_REPO:
+        log.warning("GitHub sync ignoré : GITHUB_REPO absent.")
         return
     try:
         rel = str(file_path.resolve().relative_to(Path.cwd().resolve()))
@@ -72,7 +76,9 @@ def _push_to_github(file_path: Path, content: str):
             "Authorization": f"Bearer {GITHUB_TOKEN}",
             "Accept": "application/vnd.github+json",
         }
+        log.info(f"GitHub : GET {api_url} (branch={GITHUB_BRANCH})")
         resp = requests.get(api_url, headers=headers, params={"ref": GITHUB_BRANCH}, timeout=10)
+        log.info(f"GitHub : GET status={resp.status_code}")
         sha = resp.json().get("sha") if resp.status_code == 200 else None
         payload = {
             "message": f"bot: update {rel}",
@@ -81,7 +87,9 @@ def _push_to_github(file_path: Path, content: str):
         }
         if sha:
             payload["sha"] = sha
+        log.info(f"GitHub : PUT {api_url} sha={sha!r}")
         resp = requests.put(api_url, headers=headers, json=payload, timeout=10)
+        log.info(f"GitHub : PUT status={resp.status_code} body={resp.text[:200]}")
         resp.raise_for_status()
         log.info(f"GitHub : {rel} synchronisé.")
     except Exception as e:
@@ -131,7 +139,7 @@ def append_to_memory(extracted: str):
 
     MEMORY_MD.write_text(updated)
     log.info("memory.md mis à jour.")
-    threading.Thread(target=_push_to_github, args=(MEMORY_MD, updated), daemon=True).start()
+    _push_to_github(MEMORY_MD, updated)
 
 
 def write_user_update(patch: str):
@@ -139,7 +147,7 @@ def write_user_update(patch: str):
     updated = current.rstrip("\n") + "\n\n" + patch + "\n"
     USER_MD.write_text(updated)
     log.info("user.md mis à jour.")
-    threading.Thread(target=_push_to_github, args=(USER_MD, updated), daemon=True).start()
+    _push_to_github(USER_MD, updated)
 
 
 def save_raw_log(user_id: int):
@@ -618,6 +626,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
+    log.info(f"GitHub sync : GITHUB_REPO={GITHUB_REPO!r} GITHUB_BRANCH={GITHUB_BRANCH!r} token={'set' if GITHUB_TOKEN else 'ABSENT'}")
     threading.Thread(target=_heartbeat_loop, daemon=True, name="heartbeat").start()
     log.info("Heartbeat thread démarré (digest à 8h00).")
 
