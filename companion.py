@@ -4,6 +4,7 @@ Compagnon IA Personnel — Sprint 2
 Ajout : extraction mémoire automatique + validation + écriture dans memory.md
 """
 
+import base64
 import json
 import logging
 import os
@@ -39,6 +40,9 @@ ANTHROPIC_KEY   = os.environ["ANTHROPIC_API_KEY"]
 GROQ_KEY        = os.environ["GROQ_API_KEY"]
 CHAT_ID         = os.environ["TELEGRAM_CHAT_ID"]
 MEMORY_DIR      = Path(os.environ.get("MEMORY_DIR", "./memory"))
+GITHUB_TOKEN    = os.environ.get("GITHUB_TOKEN")
+GITHUB_REPO     = os.environ.get("GITHUB_REPO")   # "owner/repo"
+GITHUB_BRANCH   = os.environ.get("GITHUB_BRANCH", "main")
 
 USER_MD         = MEMORY_DIR / "user.md"
 SOUL_MD         = MEMORY_DIR / "soul.md"
@@ -53,6 +57,34 @@ groq   = Groq(api_key=GROQ_KEY)
 conversations:  dict[int, list] = {}  # historique par user
 pending_memory: dict[int, str]  = {}  # extraction en attente de validation
 session_logs:   dict[int, list] = {}  # log brut de la session
+
+
+# ── GitHub sync ──────────────────────────────────────────────────────────────
+
+def _push_to_github(file_path: Path, content: str):
+    if not GITHUB_TOKEN or not GITHUB_REPO:
+        return
+    try:
+        rel = str(file_path.resolve().relative_to(Path.cwd().resolve()))
+        api_url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{rel}"
+        headers = {
+            "Authorization": f"Bearer {GITHUB_TOKEN}",
+            "Accept": "application/vnd.github+json",
+        }
+        resp = requests.get(api_url, headers=headers, params={"ref": GITHUB_BRANCH}, timeout=10)
+        sha = resp.json().get("sha") if resp.status_code == 200 else None
+        payload = {
+            "message": f"bot: update {rel}",
+            "content": base64.b64encode(content.encode()).decode(),
+            "branch": GITHUB_BRANCH,
+        }
+        if sha:
+            payload["sha"] = sha
+        resp = requests.put(api_url, headers=headers, json=payload, timeout=10)
+        resp.raise_for_status()
+        log.info(f"GitHub : {rel} synchronisé.")
+    except Exception as e:
+        log.error(f"GitHub sync échoué pour {file_path.name} : {e}")
 
 
 # ── Helpers fichiers ─────────────────────────────────────────────────────────
@@ -98,6 +130,7 @@ def append_to_memory(extracted: str):
 
     MEMORY_MD.write_text(updated)
     log.info("memory.md mis à jour.")
+    threading.Thread(target=_push_to_github, args=(MEMORY_MD, updated), daemon=True).start()
 
 
 def save_raw_log(user_id: int):
