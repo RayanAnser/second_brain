@@ -54,9 +54,10 @@ claude = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 groq   = Groq(api_key=GROQ_KEY)
 
 # ── State ────────────────────────────────────────────────────────────────────
-conversations:  dict[int, list] = {}  # historique par user
-pending_memory: dict[int, str]  = {}  # extraction en attente de validation
-session_logs:   dict[int, list] = {}  # log brut de la session
+conversations:       dict[int, list] = {}  # historique par user
+pending_memory:      dict[int, str]  = {}  # extraction en attente de validation
+pending_user_update: dict[int, str]  = {}  # patch user.md en attente de validation
+session_logs:        dict[int, list] = {}  # log brut de la session
 
 
 # ── GitHub sync ──────────────────────────────────────────────────────────────
@@ -133,6 +134,14 @@ def append_to_memory(extracted: str):
     threading.Thread(target=_push_to_github, args=(MEMORY_MD, updated), daemon=True).start()
 
 
+def write_user_update(patch: str):
+    current = USER_MD.read_text() if USER_MD.exists() else ""
+    updated = current.rstrip("\n") + "\n\n" + patch + "\n"
+    USER_MD.write_text(updated)
+    log.info("user.md mis à jour.")
+    threading.Thread(target=_push_to_github, args=(USER_MD, updated), daemon=True).start()
+
+
 def save_raw_log(user_id: int):
     """Sauvegarde le log brut de la session."""
     LOGS_DIR.mkdir(parents=True, exist_ok=True)
@@ -141,6 +150,98 @@ def save_raw_log(user_id: int):
     lines = session_logs.get(user_id, [])
     log_path.write_text("\n\n".join(lines))
     log.info(f"Log brut sauvegardé : {log_path}")
+
+
+# ── User profile update ──────────────────────────────────────────────────────
+
+async def extract_user_update(request: str) -> str:
+    current = USER_MD.read_text() if USER_MD.exists() else "(vide)"
+    response = claude.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=400,
+        system="""Tu mets à jour un profil utilisateur en markdown.
+Reçois : le contenu actuel de user.md et une demande de mise à jour.
+Retourne UNIQUEMENT le bloc markdown à ajouter à la fin de user.md.
+Pas de préambule, pas d'explication. Sois concis : une section courte ou quelques bullet points.""",
+        messages=[{
+            "role": "user",
+            "content": f"user.md actuel :\n\n{current}\n\nDemande : {request}",
+        }],
+    )
+    return response.content[0].text.strip()
+
+
+async def handle_command_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/update <demande> — propose une mise à jour de user.md avec confirmation."""
+    user_id = update.effective_user.id
+    request = " ".join(context.args) if context.args else ""
+
+    if not request:
+        await update.message.reply_text(
+            "Dis-moi ce que tu veux ajouter à ton profil.\n"
+            "Ex : /update je travaille maintenant sur le projet X"
+        )
+        return
+
+    await update.message.chat.send_action("typing")
+    await update.message.reply_text("Je prépare la mise à jour...")
+
+    patch = await extract_user_update(request)
+    pending_user_update[user_id] = patch
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Ajouter",  callback_data="usr_save"),
+            InlineKeyboardButton("🗑 Annuler", callback_data="usr_discard"),
+        ],
+        [InlineKeyboardButton("✏️ Modifier (réponds en texte libre)", callback_data="usr_edit")]
+    ])
+    await update.message.reply_text(
+        f"Voici ce que je vais ajouter à ton profil :\n\n{patch}\n\nJe confirme ?",
+        reply_markup=keyboard,
+    )
+
+
+async def handle_user_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Boutons de validation mise à jour user.md."""
+    query = update.callback_query
+    user_id = query.from_user.id
+    await query.answer()
+
+    if query.data == "usr_save":
+        patch = pending_user_update.pop(user_id, None)
+        if patch:
+            write_user_update(patch)
+            await query.edit_message_text("✅ Profil mis à jour.")
+        else:
+            await query.edit_message_text("Rien à sauvegarder.")
+
+    elif query.data == "usr_discard":
+        pending_user_update.pop(user_id, None)
+        await query.edit_message_text("🗑 Annulé.")
+
+    elif query.data == "usr_edit":
+        await query.edit_message_text(
+            f"Patch actuel :\n\n{pending_user_update.get(user_id, '')}\n\n"
+            "Envoie ta version corrigée en texte."
+        )
+
+
+async def handle_user_freetext(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    """Reçoit la version corrigée du patch user.md."""
+    user_id = update.effective_user.id
+    pending_user_update[user_id] = text
+
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("✅ Ajouter",  callback_data="usr_save"),
+            InlineKeyboardButton("🗑 Annuler", callback_data="usr_discard"),
+        ]
+    ])
+    await update.message.reply_text(
+        f"Version mise à jour :\n\n{text}\n\nJe confirme ?",
+        reply_markup=keyboard,
+    )
 
 
 # ── Extraction mémoire ───────────────────────────────────────────────────────
@@ -222,9 +323,12 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    # Si une validation est en attente, traite comme correction
     if user_id in pending_memory:
         await handle_memory_freetext(update, context, text)
+        return
+
+    if user_id in pending_user_update:
+        await handle_user_freetext(update, context, text)
         return
 
     await update.message.chat.send_action("typing")
@@ -508,6 +612,8 @@ def main():
     app.add_handler(CommandHandler("reset",  handle_command_reset))
     app.add_handler(CommandHandler("save",   handle_command_save))
     app.add_handler(CommandHandler("status", handle_command_status))
+    app.add_handler(CommandHandler("update", handle_command_update))
+    app.add_handler(CallbackQueryHandler(handle_user_callback,   pattern="^usr_"))
     app.add_handler(CallbackQueryHandler(handle_memory_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
