@@ -4,11 +4,16 @@ Compagnon IA Personnel — Sprint 2
 Ajout : extraction mémoire automatique + validation + écriture dans memory.md
 """
 
-import os
+import json
 import logging
+import os
 import tempfile
+import threading
+import time
 from datetime import datetime
 from pathlib import Path
+
+import requests
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -32,6 +37,7 @@ log = logging.getLogger(__name__)
 TELEGRAM_TOKEN  = os.environ["TELEGRAM_TOKEN"]
 ANTHROPIC_KEY   = os.environ["ANTHROPIC_API_KEY"]
 GROQ_KEY        = os.environ["GROQ_API_KEY"]
+CHAT_ID         = os.environ["TELEGRAM_CHAT_ID"]
 MEMORY_DIR      = Path(os.environ.get("MEMORY_DIR", "./memory"))
 
 USER_MD         = MEMORY_DIR / "user.md"
@@ -321,6 +327,141 @@ async def handle_command_status(update: Update, context: ContextTypes.DEFAULT_TY
     )
 
 
+# ── Heartbeat matinal ────────────────────────────────────────────────────────
+
+STALE_THREAD_DAYS = 3
+STALE_MEMORY_WARN = 7
+
+_HEARTBEAT_EXTRACT_SYSTEM = """\
+Tu es un extracteur de digest matinal. Analyse le contenu de memory.md et retourne un JSON strict.
+
+Retourne UNIQUEMENT ce JSON (aucun texte autour, aucun markdown) :
+{
+  "fils_ouverts_anciens": [
+    {"description": "...", "date_estimee": "YYYY-MM-DD", "jours": N}
+  ],
+  "projet_prioritaire": {
+    "nom": "...",
+    "statut": "...",
+    "prochaine_etape": "..."
+  }
+}
+
+Règles :
+- fils_ouverts_anciens : fils listés dans les sections "Fils ouverts" des sessions,
+  dont la date de session est > {seuil} jours avant aujourd'hui.
+  Si un fil n'a pas de date explicite, utilise la date de la session parente.
+- projet_prioritaire : projet "En cours" avec le plus de blocage ou d'urgence signalée.
+  Si plusieurs candidats, prends celui avec la prochaine étape la plus concrète.
+- jours : nombre de jours depuis date_estimee (entier).
+- Si aucun fil ancien : "fils_ouverts_anciens": []
+"""
+
+_MONTHS_FR = [
+    "", "janvier", "février", "mars", "avril", "mai", "juin",
+    "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+]
+
+
+def _hb_check_freshness() -> tuple[int, str]:
+    mtime = MEMORY_MD.stat().st_mtime
+    last_modified = datetime.fromtimestamp(mtime)
+    days_old = (datetime.now() - last_modified).days
+    label = last_modified.strftime("%d/%m à %H:%M")
+    return days_old, label
+
+
+def _hb_analyze_memory(memory_content: str, today: str) -> dict:
+    system = _HEARTBEAT_EXTRACT_SYSTEM.replace("{seuil}", str(STALE_THREAD_DAYS))
+    response = claude.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=1000,
+        system=system,
+        messages=[{
+            "role": "user",
+            "content": f"Date d'aujourd'hui : {today}\n\nmemory.md :\n\n{memory_content}",
+        }],
+    )
+    raw = response.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```", 2)[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    return json.loads(raw)
+
+
+def _hb_format_message(analysis: dict, freshness_days: int, freshness_label: str) -> str:
+    now = datetime.now()
+    date_str = f"{now.day} {_MONTHS_FR[now.month]} {now.year}"
+    lines = [f"🌅 *Digest du {date_str}*"]
+
+    if freshness_days >= STALE_MEMORY_WARN:
+        lines.append(
+            f"\n⚠️ _memory.md non mis à jour depuis {freshness_days} jours_"
+            f" (dernière modif : {freshness_label})"
+        )
+    else:
+        lines.append(f"\n_memory.md — dernière modif : {freshness_label}_")
+
+    fils = analysis.get("fils_ouverts_anciens", [])
+    if fils:
+        lines.append(f"\n🔴 *Fils ouverts depuis +{STALE_THREAD_DAYS}j :*")
+        for fil in fils:
+            lines.append(f"• {fil.get('description', '')} _({fil.get('jours', '?')}j)_")
+    else:
+        lines.append(f"\n✅ Aucun fil ouvert depuis plus de {STALE_THREAD_DAYS} jours.")
+
+    proj = analysis.get("projet_prioritaire", {})
+    nom = proj.get("nom", "")
+    if nom:
+        lines.append(f"\n⭐ *Projet prioritaire : {nom}*")
+        if proj.get("statut"):
+            lines.append(f"Statut : {proj['statut']}")
+        if proj.get("prochaine_etape"):
+            lines.append(f"→ {proj['prochaine_etape']}")
+
+    return "\n".join(lines)
+
+
+def _hb_send_telegram(text: str):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    resp = requests.post(
+        url,
+        json={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"},
+        timeout=10,
+    )
+    resp.raise_for_status()
+
+
+def _run_heartbeat():
+    if not MEMORY_MD.exists():
+        log.warning("Heartbeat : memory.md introuvable, digest ignoré.")
+        return
+    try:
+        today = datetime.now().strftime("%Y-%m-%d")
+        freshness_days, freshness_label = _hb_check_freshness()
+        memory_content = MEMORY_MD.read_text()
+        analysis = _hb_analyze_memory(memory_content, today)
+        message = _hb_format_message(analysis, freshness_days, freshness_label)
+        _hb_send_telegram(message)
+        log.info("Heartbeat : digest envoyé.")
+    except Exception as e:
+        log.error(f"Heartbeat : erreur — {e}")
+
+
+def _heartbeat_loop():
+    last_fired_date: str | None = None
+    while True:
+        time.sleep(60)
+        now = datetime.now()
+        today = now.strftime("%Y-%m-%d")
+        if now.hour == 8 and last_fired_date != today:
+            last_fired_date = today
+            log.info("Heartbeat : déclenchement digest matinal.")
+            threading.Thread(target=_run_heartbeat, daemon=True).start()
+
+
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
@@ -337,6 +478,9 @@ def main():
     app.add_handler(CallbackQueryHandler(handle_memory_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+
+    threading.Thread(target=_heartbeat_loop, daemon=True, name="heartbeat").start()
+    log.info("Heartbeat thread démarré (digest à 8h00).")
 
     log.info("🤖 Compagnon IA Sprint 2 démarré.")
     app.run_polling()
