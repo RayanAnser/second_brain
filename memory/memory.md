@@ -177,3 +177,66 @@
 **Fils ouverts :**
 - Roadmap Notion : contenu et structure non documentés dans la mémoire
 - Configuration Notion requise pour accès automatique (NOTION_TOKEN + NOTION_PAGES alias)
+
+### Session — 2026-05-20 21:28
+**Sujet principal** : Check rapide projets
+
+**Contexte :**
+- Utilisateur demande où il en est sur les projets
+- Réponse synthèse : Agent traduction (bloqué), Strudel (veille), Compagnon IA (Sprint 2 opérationnel), Agent admin (idée)
+
+**Capture staging :**
+- Stack complète rappelée : Telegram → Groq Whisper → Claude Sonnet → Markdown local (Railway)
+- TODO consolidé : NOTION_TOKEN .env + test E2E, GitHub sync Railway, Sprint 6 (consolidation nocturne), Sprint 7 (RAG SQLite), enrichir user.md
+
+**Fils ouverts :**
+- Aucun fil nouveau ouvert — session de check status uniquement
+
+## Fils ouverts
+- Supprimer l'agent de traduction de la liste
+
+
+### Session — 2026-05-20 21:32
+**Sujet principal** : Check rapide identité
+
+**Contexte :**
+- Utilisateur demande son prénom (test mémoire basique)
+- Réponse correcte : Rayän
+
+**Capture :**
+- Préférence alimentaire : sushis
+
+**Fils ouverts :**
+- Aucun
+
+### Session — 2026-05-20 21:38
+**Sujet principal** : Questions exploratoires — couleur préférée, origine, fonctionnement mémoire
+
+**Contexte :**
+- Utilisateur teste la mémoire (couleur préférée, origine)
+- Demande d'explication du système de capture staging + fichiers mémoire
+
+**Capture :**
+- Couleur préférée : vert (consolidée dans user.md)
+
+**Fils ouverts :**
+- Aucun
+
+| 2026-05-20 | Explorer d'autres concepts Bourdieu (habitus, champ, violence symbolique…) | Concepts | Capturé |
+
+### Session — 2026-05-20 21:40
+**Sujet principal** : Exploration concepts Bourdieu (capitaux)
+
+**Contexte :**
+- Demande d'exploration des différents concepts Bourdieu
+- Focus sur les 4 types de capitaux (économique, culturel, social, symbolique)
+- Explication des formes du capital culturel (incorporé, objectivé, institutionnalisé)
+- Conversions possibles entre capitaux
+
+**Capture :**
+- Nouveau fichier `memory/concepts/bourdieu-capitaux.md` créé
+- Connexions identifiées avec projets compagnon IA, agent traduction, Strudel
+
+**Fils ouverts :**
+- Exploration d'autres concepts Bourdieu (habitus, champ, violence symbolique) à venir
+- Quel capital creuser en priorité ou quelle application aux projets en cours ?
