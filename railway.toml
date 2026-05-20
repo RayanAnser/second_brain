@@ -1,0 +1,5 @@
+[deploy]
+startCommand = "python companion.py"
+
+[[volumes]]
+mountPath = "/app/memory"
