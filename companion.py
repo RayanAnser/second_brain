@@ -43,6 +43,8 @@ MEMORY_DIR      = Path(os.environ.get("MEMORY_DIR", "./memory"))
 GITHUB_TOKEN    = os.environ.get("GITHUB_TOKEN")
 GITHUB_REPO     = os.environ.get("GITHUB_REPO")   # "owner/repo"
 GITHUB_BRANCH   = os.environ.get("GITHUB_BRANCH", "main")
+NOTION_TOKEN          = os.environ.get("NOTION_TOKEN")
+NOTION_PARENT_PAGE_ID = os.environ.get("NOTION_PARENT_PAGE_ID")
 
 USER_MD         = MEMORY_DIR / "user.md"
 SOUL_MD         = MEMORY_DIR / "soul.md"
@@ -307,14 +309,17 @@ Intentions disponibles :
 - CAPTURE_CONCEPT : définition ou explication d'un concept à retenir
 - CAPTURE_PERSO   : info personnelle, contexte de vie
 - TACHE           : action concrète à faire
+- NOTION_READ     : lire une page Notion (slug = nom de la page)
+- NOTION_APPEND   : ajouter du contenu à une page Notion existante (slug = page cible)
+- NOTION_CREATE   : créer une nouvelle page Notion (slug = titre de la nouvelle page)
 - CONVERSATION    : tout le reste (question, discussion, conseil)
 
 Format strict :
 {"intent": "...", "slug": "...", "content": "..."}
 
 Règles :
-- slug : nom en kebab-case du projet/concept/sujet perso ; vide "" pour IDEE/TACHE/CONVERSATION
-- content : version épurée et concise de l'info à retenir ; vide "" pour CONVERSATION
+- slug : kebab-case pour CAPTURE_* ; nom exact de la page pour NOTION_* ; vide "" pour IDEE/TACHE/CONVERSATION
+- content : version épurée et concise de l'info à retenir ; vide "" pour CONVERSATION et NOTION_READ
 - En cas de doute : CONVERSATION"""
 
 
@@ -416,6 +421,168 @@ def dispatch_capture(intent: str, slug: str, content: str) -> tuple[str, Path]:
     return f"{emoji} {label} `{slug}` {verb} → memory/{rel}.", file_path
 
 
+# ── Notion ───────────────────────────────────────────────────────────────────
+
+_NOTION_BASE        = "https://api.notion.com/v1"
+_NOTION_VERSION     = "2022-06-28"
+_NOTION_READ_LIMIT  = 4000
+
+
+def _notion_headers() -> dict:
+    return {
+        "Authorization": f"Bearer {NOTION_TOKEN}",
+        "Notion-Version": _NOTION_VERSION,
+        "Content-Type": "application/json",
+    }
+
+
+def notion_search(query: str) -> list[dict]:
+    """Retourne [{id, title}, ...] pour les pages correspondant à query."""
+    resp = requests.post(
+        f"{_NOTION_BASE}/search",
+        headers=_notion_headers(),
+        json={"query": query, "filter": {"value": "page", "property": "object"}},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    results = []
+    for obj in resp.json().get("results", []):
+        rich  = obj.get("properties", {}).get("title", {}).get("title", [])
+        title = "".join(t.get("plain_text", "") for t in rich) or "(sans titre)"
+        results.append({"id": obj["id"], "title": title})
+    return results
+
+
+def _blocks_to_text(blocks: list) -> str:
+    lines = []
+    for block in blocks:
+        btype = block.get("type", "")
+        data  = block.get(btype, {})
+        rich  = data.get("rich_text", [])
+        text  = "".join(t.get("plain_text", "") for t in rich)
+        if btype == "heading_1":
+            lines.append(f"# {text}")
+        elif btype == "heading_2":
+            lines.append(f"## {text}")
+        elif btype == "heading_3":
+            lines.append(f"### {text}")
+        elif btype in ("bulleted_list_item", "numbered_list_item"):
+            lines.append(f"- {text}")
+        elif btype == "to_do":
+            checked = "x" if data.get("checked") else " "
+            lines.append(f"[{checked}] {text}")
+        elif text:
+            lines.append(text)
+    return "\n".join(lines)
+
+
+def notion_get_text(page_id: str) -> str:
+    resp = requests.get(
+        f"{_NOTION_BASE}/blocks/{page_id}/children",
+        headers=_notion_headers(),
+        params={"page_size": 100},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    text = _blocks_to_text(resp.json().get("results", []))
+    if len(text) > _NOTION_READ_LIMIT:
+        text = text[:_NOTION_READ_LIMIT] + "\n…[tronqué]"
+    return text
+
+
+def notion_append(page_id: str, content: str) -> None:
+    lines = [l for l in content.splitlines() if l.strip()]
+    if not lines:
+        return
+    children = [
+        {
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {"rich_text": [{"type": "text", "text": {"content": line}}]},
+        }
+        for line in lines
+    ]
+    resp = requests.patch(
+        f"{_NOTION_BASE}/blocks/{page_id}/children",
+        headers=_notion_headers(),
+        json={"children": children},
+        timeout=10,
+    )
+    resp.raise_for_status()
+
+
+def notion_create_page(title: str, content: str) -> str:
+    """Crée une page sous NOTION_PARENT_PAGE_ID. Retourne l'URL."""
+    lines = [l for l in content.splitlines() if l.strip()]
+    children = [
+        {
+            "object": "block",
+            "type": "paragraph",
+            "paragraph": {"rich_text": [{"type": "text", "text": {"content": line}}]},
+        }
+        for line in lines
+    ]
+    resp = requests.post(
+        f"{_NOTION_BASE}/pages",
+        headers=_notion_headers(),
+        json={
+            "parent": {"page_id": NOTION_PARENT_PAGE_ID},
+            "properties": {
+                "title": {"title": [{"type": "text", "text": {"content": title}}]}
+            },
+            "children": children,
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    page_id = resp.json()["id"]
+    return f"https://notion.so/{page_id.replace('-', '')}"
+
+
+def resolve_page(slug: str) -> str | None:
+    """Résout un nom/alias vers un page_id Notion."""
+    pages_env = os.environ.get("NOTION_PAGES", "")
+    if pages_env:
+        try:
+            aliases = json.loads(pages_env)
+            if slug in aliases:
+                return aliases[slug]
+        except Exception:
+            pass
+    results = notion_search(slug)
+    return results[0]["id"] if results else None
+
+
+async def handle_notion_read(slug: str, user_message: str, user_id: int) -> str:
+    if not NOTION_TOKEN:
+        return "NOTION_TOKEN non configuré."
+    page_id = resolve_page(slug)
+    if not page_id:
+        return f"Page Notion introuvable : « {slug} »."
+    content = notion_get_text(page_id)
+    augmented = f"[Contenu Notion — {slug}]\n{content}\n\nMessage : {user_message}"
+    return await ask_claude(augmented, user_id)
+
+
+async def handle_notion_append(slug: str, content: str) -> str:
+    if not NOTION_TOKEN:
+        return "NOTION_TOKEN non configuré."
+    page_id = resolve_page(slug)
+    if not page_id:
+        return f"Page Notion introuvable : « {slug} »."
+    notion_append(page_id, content)
+    return f"📝 Ajouté à `{slug}`."
+
+
+async def handle_notion_create(slug: str, content: str) -> str:
+    if not NOTION_TOKEN:
+        return "NOTION_TOKEN non configuré."
+    if not NOTION_PARENT_PAGE_ID:
+        return "NOTION_PARENT_PAGE_ID non configuré — impossible de créer une page."
+    url = notion_create_page(slug, content)
+    return f"📄 Page `{slug}` créée : {url}"
+
+
 # ── Transcription vocale ─────────────────────────────────────────────────────
 
 async def transcribe_voice(file_path: str) -> str:
@@ -466,6 +633,28 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     result = await classify_intent(text)
     intent = result.get("intent", "CONVERSATION")
+
+    if intent in ("NOTION_READ", "NOTION_APPEND", "NOTION_CREATE"):
+        slug    = result.get("slug", "")
+        content = result.get("content", "")
+        try:
+            if intent == "NOTION_READ":
+                reply = await handle_notion_read(slug, text, user_id)
+                await update.message.reply_text(reply)
+            elif intent == "NOTION_APPEND":
+                confirm = await handle_notion_append(slug, content)
+                session_logs.setdefault(user_id, []).append(f"USER : {text}")
+                session_logs[user_id].append(f"[NOTION_APPEND → {slug}] {content}")
+                await update.message.reply_text(confirm)
+            else:
+                confirm = await handle_notion_create(slug, content)
+                session_logs.setdefault(user_id, []).append(f"USER : {text}")
+                session_logs[user_id].append(f"[NOTION_CREATE] {slug}")
+                await update.message.reply_text(confirm)
+        except Exception as e:
+            log.error(f"Notion handler échoué ({intent}) : {e}")
+            await update.message.reply_text(f"Erreur Notion : {e}")
+        return
 
     if intent != "CONVERSATION":
         slug    = result.get("slug", "")
