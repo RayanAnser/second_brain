@@ -48,6 +48,9 @@ USER_MD         = MEMORY_DIR / "user.md"
 SOUL_MD         = MEMORY_DIR / "soul.md"
 MEMORY_MD       = MEMORY_DIR / "memory.md"
 LOGS_DIR        = MEMORY_DIR / "logs"
+PROJETS_DIR     = MEMORY_DIR / "projets"
+CONCEPTS_DIR    = MEMORY_DIR / "concepts"
+PERSO_DIR       = MEMORY_DIR / "perso"
 
 # ── Clients ──────────────────────────────────────────────────────────────────
 claude = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
@@ -293,6 +296,103 @@ Règles :
     return response.content[0].text.strip()
 
 
+# ── Détection d'intention ─────────────────────────────────────────────────────
+
+_INTENT_SYSTEM = """\
+Classifie le message utilisateur et retourne UNIQUEMENT du JSON valide, sans texte autour.
+
+Intentions disponibles :
+- CAPTURE_IDEE    : idée, insight, réflexion à noter
+- CAPTURE_PROJET  : info liée à un projet précis
+- CAPTURE_CONCEPT : définition ou explication d'un concept à retenir
+- CAPTURE_PERSO   : info personnelle, contexte de vie
+- TACHE           : action concrète à faire
+- CONVERSATION    : tout le reste (question, discussion, conseil)
+
+Format strict :
+{"intent": "...", "slug": "...", "content": "..."}
+
+Règles :
+- slug : nom en kebab-case du projet/concept/sujet perso ; vide "" pour IDEE/TACHE/CONVERSATION
+- content : version épurée et concise de l'info à retenir ; vide "" pour CONVERSATION
+- En cas de doute : CONVERSATION"""
+
+
+async def classify_intent(text: str) -> dict:
+    try:
+        response = claude.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=100,
+            system=_INTENT_SYSTEM,
+            messages=[{"role": "user", "content": text}],
+        )
+        return json.loads(response.content[0].text.strip())
+    except Exception as e:
+        log.warning(f"classify_intent échoué ({e}), fallback CONVERSATION.")
+        return {"intent": "CONVERSATION", "slug": "", "content": ""}
+
+
+def _append_to_section(file_path: Path, section: str, line: str):
+    """Insère '- line' sous '## section', crée la section si absente."""
+    content = file_path.read_text() if file_path.exists() else ""
+    header = f"## {section}"
+    new_line = f"- {line}"
+
+    if header in content:
+        idx = content.index(header) + len(header)
+        next_sec = content.find("\n##", idx)
+        if next_sec == -1:
+            updated = content.rstrip("\n") + f"\n{new_line}\n"
+        else:
+            updated = content[:next_sec] + f"\n{new_line}" + content[next_sec:]
+    else:
+        updated = content.rstrip("\n") + f"\n\n{header}\n{new_line}\n"
+
+    file_path.write_text(updated)
+
+
+_CAPTURE_META = {
+    "CAPTURE_IDEE":    ("💡", "Idée",    None),
+    "TACHE":           ("📋", "Tâche",   None),
+    "CAPTURE_PROJET":  ("📁", "Projet",  MEMORY_DIR / "projets"),
+    "CAPTURE_CONCEPT": ("🧠", "Concept", MEMORY_DIR / "concepts"),
+    "CAPTURE_PERSO":   ("👤", "Perso",   MEMORY_DIR / "perso"),
+}
+
+
+def dispatch_capture(intent: str, slug: str, content: str) -> tuple[str, Path]:
+    """Écrit la capture dans le bon fichier. Retourne (confirmation, path)."""
+    emoji, label, subdir = _CAPTURE_META[intent]
+    today = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    if intent == "CAPTURE_IDEE":
+        _append_to_section(MEMORY_MD, "Idées en suspens", content)
+        _push_to_github(MEMORY_MD, MEMORY_MD.read_text())
+        return f"{emoji} Idée ajoutée dans memory.md.", MEMORY_MD
+
+    if intent == "TACHE":
+        _append_to_section(MEMORY_MD, "Fils ouverts", content)
+        _push_to_github(MEMORY_MD, MEMORY_MD.read_text())
+        return f"{emoji} Tâche ajoutée aux fils ouverts.", MEMORY_MD
+
+    slug = slug or "divers"
+    subdir.mkdir(parents=True, exist_ok=True)
+    file_path = subdir / f"{slug}.md"
+    is_new = not file_path.exists()
+
+    if is_new:
+        updated = f"# {slug}\n\n### {today}\n{content}\n"
+    else:
+        updated = file_path.read_text().rstrip("\n") + f"\n\n### {today}\n{content}\n"
+
+    file_path.write_text(updated)
+    _push_to_github(file_path, updated)
+
+    verb = "créé" if is_new else "mis à jour"
+    rel = file_path.relative_to(MEMORY_DIR)
+    return f"{emoji} {label} `{slug}` {verb} → memory/{rel}.", file_path
+
+
 # ── Transcription vocale ─────────────────────────────────────────────────────
 
 async def transcribe_voice(file_path: str) -> str:
@@ -340,6 +440,23 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.chat.send_action("typing")
+
+    result = await classify_intent(text)
+    intent = result.get("intent", "CONVERSATION")
+
+    if intent != "CONVERSATION":
+        slug    = result.get("slug", "")
+        content = result.get("content", text)
+        try:
+            confirm, _ = dispatch_capture(intent, slug, content)
+            session_logs.setdefault(user_id, []).append(f"USER : {text}")
+            session_logs[user_id].append(f"[{intent}] {content}")
+            await update.message.reply_text(confirm)
+        except Exception as e:
+            log.error(f"dispatch_capture échoué : {e}")
+            await update.message.reply_text("Erreur lors de la capture. Réessaie.")
+        return
+
     try:
         reply = await ask_claude(text, user_id)
         await update.message.reply_text(reply)
