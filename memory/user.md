@@ -7,6 +7,7 @@
 ---
 
 ## Identité & rôle
+## Identité & rôle
 - **Prénom** : Rayän
 - **Âge** : 30 ans
 - **Métier** : AI Product Builder / Product Owner IA
@@ -15,6 +16,8 @@
 - **Nourriture préférée** : Sushis
 - **Couleur préférée** : Vert
 - **Origine** : Avignon, Vaucluse
+- **Lieu de résidence** : Paris
+- **Intérêts** : Football
 
 ## Projets en cours
 

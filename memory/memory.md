@@ -44,10 +44,11 @@
 ---
 
 ## 🟡 Idées en suspens
+## 🟡 Idées en suspens
 | Date | Idée | Domaine | Statut |
 |------|------|---------|--------|
 | 2026-05-20 | Intégration Google Calendar et Proton pour synchroniser les calendriers | Compagnon IA | Capturé |
-| — | — | — | — |
+| 2026-05-20 | Explorer autres concepts Bourdieu : champ, violence symbolique, distinction | Concepts | Capturé |
 
 ## 🟢 Décisions prises
 
@@ -240,3 +241,15 @@
 **Fils ouverts :**
 - Exploration d'autres concepts Bourdieu (habitus, champ, violence symbolique) à venir
 - Quel capital creuser en priorité ou quelle application aux projets en cours ?
+
+
+### Session — 2026-05-20 21:44
+**Sujet principal** : Question exploration en cours
+
+**Contexte :**
+- Utilisateur demande ce qu'il explore en ce moment
+- Réponse : Bourdieu et les capitaux (4 types + conversions)
+
+**Fils ouverts :**
+- Quel capital approfondir en priorité ?
+- Appliquer les concepts Bourdieu à un projet existant ?
