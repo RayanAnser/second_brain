@@ -318,6 +318,24 @@ Règles :
 - En cas de doute : CONVERSATION"""
 
 
+def _parse_intent_json(raw: str) -> dict:
+    """Extrait le JSON d'une réponse Haiku potentiellement enveloppée en markdown."""
+    text = raw.strip()
+    # strip ```json ... ``` ou ``` ... ```
+    if text.startswith("```"):
+        lines = text.splitlines()
+        text = "\n".join(
+            line for line in lines
+            if not line.startswith("```")
+        ).strip()
+    # extraire le premier {...} si du texte précède
+    start = text.find("{")
+    end   = text.rfind("}")
+    if start != -1 and end != -1:
+        text = text[start:end + 1]
+    return json.loads(text)
+
+
 async def classify_intent(text: str) -> dict:
     try:
         response = claude.messages.create(
@@ -326,7 +344,12 @@ async def classify_intent(text: str) -> dict:
             system=_INTENT_SYSTEM,
             messages=[{"role": "user", "content": text}],
         )
-        return json.loads(response.content[0].text.strip())
+        raw = response.content[0].text if response.content else ""
+        log.info(f"classify_intent raw={raw!r}")
+        if not raw.strip():
+            log.warning("classify_intent : réponse vide, fallback CONVERSATION.")
+            return {"intent": "CONVERSATION", "slug": "", "content": ""}
+        return _parse_intent_json(raw)
     except Exception as e:
         log.warning(f"classify_intent échoué ({e}), fallback CONVERSATION.")
         return {"intent": "CONVERSATION", "slug": "", "content": ""}
