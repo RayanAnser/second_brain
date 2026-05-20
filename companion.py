@@ -4,6 +4,7 @@ Compagnon IA Personnel — Sprint 2
 Ajout : extraction mémoire automatique + validation + écriture dans memory.md
 """
 
+import asyncio
 import base64
 import json
 import logging
@@ -53,6 +54,8 @@ LOGS_DIR        = MEMORY_DIR / "logs"
 PROJETS_DIR     = MEMORY_DIR / "projets"
 CONCEPTS_DIR    = MEMORY_DIR / "concepts"
 PERSO_DIR       = MEMORY_DIR / "perso"
+STAGING_FILE    = MEMORY_DIR / "staging.json"
+COMMANDS_MD     = MEMORY_DIR / "commands.md"
 
 # ── Clients ──────────────────────────────────────────────────────────────────
 claude = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
@@ -60,8 +63,9 @@ groq   = Groq(api_key=GROQ_KEY)
 
 # ── State ────────────────────────────────────────────────────────────────────
 conversations:       dict[int, list] = {}  # historique par user
-pending_memory:      dict[int, str]  = {}  # extraction en attente de validation
-pending_user_update: dict[int, str]  = {}  # patch user.md en attente de validation
+pending_save_ops:    dict[int, dict] = {}  # résultat save_intelligently en attente de confirmation
+pending_user_update: dict[int, str]  = {}  # patch user.md en attente de validation (/update)
+staged_captures:     dict[int, list] = {}  # captures stagées en attente de /save
 session_logs:        dict[int, list] = {}  # log brut de la session
 
 
@@ -105,7 +109,7 @@ def _push_to_github(file_path: Path, content: str):
 
 def load_context() -> str:
     parts = []
-    for path, label in [(SOUL_MD, "SOUL"), (USER_MD, "USER"), (MEMORY_MD, "MEMORY")]:
+    for path, label in [(SOUL_MD, "SOUL"), (USER_MD, "USER"), (MEMORY_MD, "MEMORY"), (COMMANDS_MD, "COMMANDS")]:
         if path.exists():
             parts.append(f"<{label}>\n{path.read_text()}\n</{label}>")
         else:
@@ -128,23 +132,6 @@ Règles absolues :
 - Si l'utilisateur part dans tous les sens, nomme-le et propose un choix
 """
 
-
-def append_to_memory(extracted: str):
-    """Ajoute l'extraction validée dans memory.md."""
-    today = datetime.now().strftime("%Y-%m-%d %H:%M")
-    memory_content = MEMORY_MD.read_text() if MEMORY_MD.exists() else ""
-
-    log_section = "## 📋 Log des sessions"
-    new_entry = f"\n### Session — {today}\n{extracted}\n"
-
-    if log_section in memory_content:
-        updated = memory_content.replace(log_section, log_section + new_entry)
-    else:
-        updated = memory_content + f"\n\n{log_section}\n{new_entry}"
-
-    MEMORY_MD.write_text(updated)
-    log.info("memory.md mis à jour.")
-    _push_to_github(MEMORY_MD, updated)
 
 
 def write_user_update(patch: str):
@@ -257,45 +244,182 @@ async def handle_user_freetext(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
 
-# ── Extraction mémoire ───────────────────────────────────────────────────────
+# ── Mémoire intelligente ─────────────────────────────────────────────────────
 
-async def extract_memory(user_id: int) -> str:
-    """Demande à Claude d'extraire ce qui mérite d'être mémorisé."""
-    history = conversations.get(user_id, [])
-    if not history:
-        return "RIEN_A_RETENIR"
+_SAVE_SYSTEM = """\
+Tu es un système de mémoire intelligent. Tu reçois la conversation de la session, d'éventuelles captures stagées, et le contenu actuel de tous les fichiers mémoire.
 
-    conversation_text = "\n".join([
+Ta tâche : décider de la meilleure façon de persister les informations importantes, en consolidant plutôt qu'en ajoutant quand l'info existe déjà.
+
+Fichiers mémoire disponibles :
+- memory/user.md        : profil utilisateur (préférences, contexte de vie, style cognitif)
+- memory/memory.md      : mémoire active (décisions, idées, fils ouverts, log de sessions)
+- memory/projets/<slug>.md  : un fichier par projet (crée si nouveau projet substantiel)
+- memory/concepts/<slug>.md : un fichier par concept important
+- memory/perso/<slug>.md    : infos personnelles structurées
+
+Retourne UNIQUEMENT ce JSON (sans backticks, sans texte autour) :
+{
+  "ops": [
+    {
+      "path": "memory/...",
+      "mode": "append|replace_section|replace_file",
+      "section": "## Titre" ,
+      "content": "contenu markdown",
+      "reason": "justification courte"
+    }
+  ],
+  "summary": "résumé en 1-2 phrases"
+}
+
+Règles :
+- Consolide si une info similaire existe déjà (préfère replace_section à append)
+- replace_file uniquement pour fichiers courts < 400 mots (user.md, perso/)
+- replace_section : champ "section" obligatoire, contenu = tout ce qui va SOUS le header
+- Crée de nouveaux fichiers projets/concepts si le contenu est nouveau et substantiel
+- N'écris que ce qui mérite d'être retenu durablement — ignore le small talk
+- Si rien de notable : {"ops": [], "summary": "Rien de notable à retenir."}
+- Paths relatifs depuis la racine du projet (ex: "memory/user.md")"""
+
+_CAPTURE_INTENTS = frozenset({"CAPTURE_IDEE", "CAPTURE_PROJET", "CAPTURE_CONCEPT", "CAPTURE_PERSO"})
+
+
+def stage_capture(user_id: int, content: str, hint: str):
+    entry = {
+        "content": content,
+        "hint": hint,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
+    }
+    staged_captures.setdefault(user_id, []).append(entry)
+    STAGING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    STAGING_FILE.write_text(json.dumps(
+        {str(k): v for k, v in staged_captures.items()},
+        ensure_ascii=False, indent=2,
+    ))
+    log.info(f"Capture stagée : [{hint}] {content[:60]!r}")
+
+
+def load_staging() -> bool:
+    if not STAGING_FILE.exists():
+        return False
+    try:
+        data = json.loads(STAGING_FILE.read_text())
+        for str_uid, captures in data.items():
+            if captures:
+                staged_captures[int(str_uid)] = captures
+        total = sum(len(v) for v in staged_captures.values())
+        if total:
+            log.info(f"Staging rechargé : {total} capture(s).")
+        return total > 0
+    except Exception as e:
+        log.error(f"load_staging échoué : {e}")
+        return False
+
+
+def build_memory_context() -> str:
+    parts = []
+    for path, label in [(SOUL_MD, "memory/soul.md"), (USER_MD, "memory/user.md"), (MEMORY_MD, "memory/memory.md")]:
+        parts.append(f"[{label}]\n{path.read_text() if path.exists() else '(absent)'}")
+    for subdir, name in [(PROJETS_DIR, "projets"), (CONCEPTS_DIR, "concepts"), (PERSO_DIR, "perso")]:
+        if not subdir.exists():
+            continue
+        for f in sorted(subdir.glob("*.md")):
+            content = f.read_text()
+            if len(content) > 3000:
+                content = content[:1500] + "\n…[tronqué]"
+            parts.append(f"[memory/{name}/{f.name}]\n{content}")
+    return "\n\n---\n\n".join(parts)
+
+
+async def save_intelligently(user_id: int) -> dict:
+    conversation_text = "\n".join(
         f"{m['role'].upper()} : {m['content']}"
-        for m in history
-    ])
+        for m in conversations.get(user_id, [])
+    )
+    staged = staged_captures.get(user_id, [])
+    staged_text = ""
+    if staged:
+        lines = [f"- [{e['hint']}] {e['content']} ({e['timestamp']})" for e in staged]
+        staged_text = "Captures stagées :\n" + "\n".join(lines)
+
+    user_content = f"Date : {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
+    if conversation_text:
+        user_content += f"Conversation :\n{conversation_text}\n\n"
+    if staged_text:
+        user_content += staged_text + "\n\n"
+    user_content += f"État actuel des fichiers mémoire :\n\n{build_memory_context()}"
 
     response = claude.messages.create(
         model="claude-sonnet-4-5",
-        max_tokens=800,
-        system="""Tu es un extracteur de mémoire. Ton job : lire une conversation et extraire UNIQUEMENT ce qui mérite d'être retenu durablement.
-
-Format de sortie strict (markdown) :
-**Décisions prises :** (si aucune, omets la section)
-- ...
-
-**Idées capturées :** (si aucune, omets la section)
-- ...
-
-**Projets mis à jour :** (si aucun, omets la section)
-- Nom du projet → nouvelle info
-
-**Fils ouverts :** (questions non résolues, sujets à reprendre)
-- ...
-
-Règles :
-- Sois concis — une ligne par élément
-- N'invente rien qui n'est pas dans la conversation
-- Si rien de notable, réponds uniquement : RIEN_A_RETENIR""",
-        messages=[{"role": "user", "content": f"Conversation :\n\n{conversation_text}"}]
+        max_tokens=4096,
+        system=_SAVE_SYSTEM,
+        messages=[{"role": "user", "content": user_content}],
     )
+    raw = response.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    return json.loads(raw)
 
-    return response.content[0].text.strip()
+
+def execute_ops(ops: list) -> list[str]:
+    modified = []
+    base = MEMORY_DIR.resolve().parent
+    for op in ops:
+        try:
+            path    = base / op["path"]
+            mode    = op["mode"]
+            content = op.get("content", "")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            existing = path.read_text() if path.exists() else ""
+
+            if mode == "append":
+                sep     = "\n\n" if existing else ""
+                updated = existing.rstrip("\n") + sep + content.rstrip("\n") + "\n"
+
+            elif mode == "replace_section":
+                header = op.get("section", "").strip()
+                if header and header in existing:
+                    idx            = existing.index(header)
+                    end_of_line    = existing.find("\n", idx) + 1
+                    next_sec       = existing.find("\n##", end_of_line)
+                    tail           = existing[next_sec:] if next_sec != -1 else ""
+                    updated        = existing[:end_of_line] + content.rstrip("\n") + "\n" + tail
+                else:
+                    sep     = "\n\n" if existing else ""
+                    updated = existing.rstrip("\n") + sep + (header + "\n" if header else "") + content.rstrip("\n") + "\n"
+
+            elif mode == "replace_file":
+                updated = content.rstrip("\n") + "\n"
+
+            else:
+                log.warning(f"execute_ops : mode inconnu '{mode}', ignoré.")
+                continue
+
+            path.write_text(updated)
+            _push_to_github(path, updated)
+            modified.append(op["path"])
+            log.info(f"execute_ops : {op['path']} [{mode}] — {op.get('reason', '')}")
+        except Exception as e:
+            log.error(f"execute_ops : échec sur {op.get('path')} — {e}")
+
+    return modified
+
+
+def format_ops_plan(ops: list, summary: str) -> str:
+    if not ops:
+        return summary
+    _MODE_LABELS = {"append": "ajout", "replace_section": "màj section", "replace_file": "réécriture"}
+    lines = ["Voici ce que je propose :\n"]
+    for op in ops:
+        label   = _MODE_LABELS.get(op["mode"], op["mode"])
+        section = f" `{op['section']}`" if op.get("section") else ""
+        reason  = f" — {op['reason']}" if op.get("reason") else ""
+        lines.append(f"• `{op['path']}`{section} [{label}]{reason}")
+    lines.append(f"\n{summary}")
+    return "\n".join(lines)
 
 
 # ── Détection d'intention ─────────────────────────────────────────────────────
@@ -318,7 +442,7 @@ Format strict :
 {"intent": "...", "slug": "...", "content": "..."}
 
 Règles :
-- slug : kebab-case pour CAPTURE_* ; nom exact de la page pour NOTION_* ; vide "" pour IDEE/TACHE/CONVERSATION
+- slug : kebab-case pour CAPTURE_* ; nom exact de la page pour NOTION_READ/APPEND ; titre lisible (avec majuscules, sans kebab) pour NOTION_CREATE ; vide "" pour IDEE/TACHE/CONVERSATION
 - content : version épurée et concise de l'info à retenir ; vide "" pour CONVERSATION et NOTION_READ
 - En cas de doute : CONVERSATION"""
 
@@ -328,7 +452,7 @@ async def classify_intent(text: str) -> dict:
     try:
         response = claude.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=100,
+            max_tokens=300,
             system=_INTENT_SYSTEM,
             messages=[{"role": "user", "content": text}],
         )
@@ -366,46 +490,9 @@ def _append_to_section(file_path: Path, section: str, line: str):
     file_path.write_text(updated)
 
 
-_CAPTURE_META = {
-    "CAPTURE_IDEE":    ("💡", "Idée",    None),
-    "TACHE":           ("📋", "Tâche",   None),
-    "CAPTURE_PROJET":  ("📁", "Projet",  MEMORY_DIR / "projets"),
-    "CAPTURE_CONCEPT": ("🧠", "Concept", MEMORY_DIR / "concepts"),
-    "CAPTURE_PERSO":   ("👤", "Perso",   MEMORY_DIR / "perso"),
-}
-
-
-def dispatch_capture(intent: str, slug: str, content: str) -> tuple[str, Path]:
-    """Écrit la capture dans le bon fichier. Retourne (confirmation, path)."""
-    emoji, label, subdir = _CAPTURE_META[intent]
-    today = datetime.now().strftime("%Y-%m-%d %H:%M")
-
-    if intent == "CAPTURE_IDEE":
-        _append_to_section(MEMORY_MD, "Idées en suspens", content)
-        _push_to_github(MEMORY_MD, MEMORY_MD.read_text())
-        return f"{emoji} Idée ajoutée dans memory.md.", MEMORY_MD
-
-    if intent == "TACHE":
-        _append_to_section(MEMORY_MD, "Fils ouverts", content)
-        _push_to_github(MEMORY_MD, MEMORY_MD.read_text())
-        return f"{emoji} Tâche ajoutée aux fils ouverts.", MEMORY_MD
-
-    slug = slug or "divers"
-    subdir.mkdir(parents=True, exist_ok=True)
-    file_path = subdir / f"{slug}.md"
-    is_new = not file_path.exists()
-
-    if is_new:
-        updated = f"# {slug}\n\n### {today}\n{content}\n"
-    else:
-        updated = file_path.read_text().rstrip("\n") + f"\n\n### {today}\n{content}\n"
-
-    file_path.write_text(updated)
-    _push_to_github(file_path, updated)
-
-    verb = "créé" if is_new else "mis à jour"
-    rel = file_path.relative_to(MEMORY_DIR)
-    return f"{emoji} {label} `{slug}` {verb} → memory/{rel}.", file_path
+def _dispatch_tache(content: str):
+    _append_to_section(MEMORY_MD, "Fils ouverts", content)
+    _push_to_github(MEMORY_MD, MEMORY_MD.read_text())
 
 
 # ── Notion ───────────────────────────────────────────────────────────────────
@@ -424,17 +511,22 @@ def _notion_headers() -> dict:
 
 
 def notion_search(query: str) -> list[dict]:
-    """Retourne [{id, title}, ...] pour les pages correspondant à query."""
+    """Retourne [{id, title}, ...] pour les pages et databases correspondant à query."""
     resp = requests.post(
         f"{_NOTION_BASE}/search",
         headers=_notion_headers(),
-        json={"query": query, "filter": {"value": "page", "property": "object"}},
+        json={"query": query},
         timeout=10,
     )
     resp.raise_for_status()
     results = []
     for obj in resp.json().get("results", []):
-        rich  = obj.get("properties", {}).get("title", {}).get("title", [])
+        if obj.get("object") == "database":
+            # database : titre dans obj["title"] (liste de rich_text)
+            rich = obj.get("title", [])
+        else:
+            # page : titre dans obj["properties"]["title"]["title"]
+            rich = obj.get("properties", {}).get("title", {}).get("title", [])
         title = "".join(t.get("plain_text", "") for t in rich) or "(sans titre)"
         results.append({"id": obj["id"], "title": title})
     return results
@@ -526,38 +618,111 @@ def notion_create_page(title: str, content: str) -> str:
     return f"https://notion.so/{page_id.replace('-', '')}"
 
 
-def resolve_page(slug: str) -> str | None:
-    """Résout un nom/alias vers un page_id Notion."""
+def _notion_query_database(database_id: str) -> str:
+    """Retourne les entrées d'une database Notion sous forme de texte."""
+    resp = requests.post(
+        f"{_NOTION_BASE}/databases/{database_id}/query",
+        headers=_notion_headers(),
+        json={"page_size": 50},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    lines = []
+    for page in resp.json().get("results", []):
+        for prop_val in page.get("properties", {}).values():
+            if prop_val.get("type") == "title":
+                rich  = prop_val.get("title", [])
+                title = "".join(t.get("plain_text", "") for t in rich)
+                if title:
+                    lines.append(f"- {title}")
+                break
+    text = "\n".join(lines) if lines else "(base de données vide)"
+    if len(text) > _NOTION_READ_LIMIT:
+        text = text[:_NOTION_READ_LIMIT] + "\n…[tronqué]"
+    return text
+
+
+def notion_add_database_row(database_id: str, text: str) -> None:
+    """Ajoute une ligne à une database Notion."""
+    resp = requests.get(
+        f"{_NOTION_BASE}/databases/{database_id}",
+        headers=_notion_headers(),
+        timeout=10,
+    )
+    resp.raise_for_status()
+    title_prop = next(
+        (name for name, val in resp.json().get("properties", {}).items() if val.get("type") == "title"),
+        "Name",
+    )
+    resp = requests.post(
+        f"{_NOTION_BASE}/pages",
+        headers=_notion_headers(),
+        json={
+            "parent": {"database_id": database_id},
+            "properties": {
+                title_prop: {"title": [{"type": "text", "text": {"content": text}}]},
+            },
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+
+
+def _notion_read_content(obj: dict) -> str:
+    """Lit le contenu d'une page ou les entrées d'une database."""
+    if obj["type"] == "database":
+        return _notion_query_database(obj["id"])
+    return notion_get_text(obj["id"])
+
+
+def resolve_page(slug: str) -> dict | None:
+    """Résout un nom/alias vers {id, type} Notion, ou None si introuvable."""
     pages_env = os.environ.get("NOTION_PAGES", "")
     if pages_env:
         try:
             aliases = json.loads(pages_env)
             if slug in aliases:
-                return aliases[slug]
+                entry = aliases[slug]
+                # Supporte "page_id" (str) ou {"id": ..., "type": ...}
+                if isinstance(entry, str):
+                    return {"id": entry, "type": "page"}
+                return entry
         except Exception:
             pass
     results = notion_search(slug)
-    return results[0]["id"] if results else None
+    return results[0] if results else None
 
 
 async def handle_notion_read(slug: str, user_message: str, user_id: int) -> str:
     if not NOTION_TOKEN:
         return "NOTION_TOKEN non configuré."
-    page_id = resolve_page(slug)
-    if not page_id:
+    obj = resolve_page(slug)
+    if not obj:
         return f"Page Notion introuvable : « {slug} »."
-    content = notion_get_text(page_id)
-    augmented = f"[Contenu Notion — {slug}]\n{content}\n\nMessage : {user_message}"
-    return await ask_claude(augmented, user_id)
+    notion_content = _notion_read_content(obj)
+    # Injecté en system prompt uniquement — ne pollue pas l'historique de conversation
+    response = claude.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=1024,
+        system=build_system_prompt() + f"\n\n[Contenu Notion — {slug}]\n{notion_content}",
+        messages=list(conversations.get(user_id, [])) + [{"role": "user", "content": user_message}],
+    )
+    reply = response.content[0].text
+    session_logs.setdefault(user_id, []).append(f"USER : {user_message} [lu Notion: {slug}]")
+    session_logs[user_id].append(f"ASSISTANT : {reply}")
+    return reply
 
 
 async def handle_notion_append(slug: str, content: str) -> str:
     if not NOTION_TOKEN:
         return "NOTION_TOKEN non configuré."
-    page_id = resolve_page(slug)
-    if not page_id:
+    obj = resolve_page(slug)
+    if not obj:
         return f"Page Notion introuvable : « {slug} »."
-    notion_append(page_id, content)
+    if obj["type"] == "database":
+        notion_add_database_row(obj["id"], content)
+        return f"📝 Ligne ajoutée à la database `{slug}`."
+    notion_append(obj["id"], content)
     return f"📝 Ajouté à `{slug}`."
 
 
@@ -608,10 +773,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text
 
-    if user_id in pending_memory:
-        await handle_memory_freetext(update, context, text)
-        return
-
     if user_id in pending_user_update:
         await handle_user_freetext(update, context, text)
         return
@@ -620,10 +781,24 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     result = await classify_intent(text)
     intent = result.get("intent", "CONVERSATION")
+    content = result.get("content", text)
+    slug    = result.get("slug", "")
+
+    if intent in _CAPTURE_INTENTS:
+        stage_capture(user_id, content, intent)
+        session_logs.setdefault(user_id, []).append(f"USER : {text}")
+        session_logs[user_id].append(f"[{intent}] {content}")
+        await update.message.reply_text("Noté.")
+        return
+
+    if intent == "TACHE":
+        _dispatch_tache(content)
+        session_logs.setdefault(user_id, []).append(f"USER : {text}")
+        session_logs[user_id].append(f"[TACHE] {content}")
+        await update.message.reply_text("📋 Tâche ajoutée aux fils ouverts.")
+        return
 
     if intent in ("NOTION_READ", "NOTION_APPEND", "NOTION_CREATE"):
-        slug    = result.get("slug", "")
-        content = result.get("content", "")
         try:
             if intent == "NOTION_READ":
                 reply = await handle_notion_read(slug, text, user_id)
@@ -641,19 +816,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             log.error(f"Notion handler échoué ({intent}) : {e}")
             await update.message.reply_text(f"Erreur Notion : {e}")
-        return
-
-    if intent != "CONVERSATION":
-        slug    = result.get("slug", "")
-        content = result.get("content", text)
-        try:
-            confirm, _ = dispatch_capture(intent, slug, content)
-            session_logs.setdefault(user_id, []).append(f"USER : {text}")
-            session_logs[user_id].append(f"[{intent}] {content}")
-            await update.message.reply_text(confirm)
-        except Exception as e:
-            log.error(f"dispatch_capture échoué : {e}")
-            await update.message.reply_text("Erreur lors de la capture. Réessaie.")
         return
 
     try:
@@ -677,11 +839,23 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         transcript = await transcribe_voice(tmp_path)
         log.info(f"Transcription : {transcript}")
 
-        reply = await ask_claude(transcript, user_id)
-        await update.message.reply_text(
-            f"_{transcript}_\n\n{reply}",
-            parse_mode="Markdown"
-        )
+        result  = await classify_intent(transcript)
+        intent  = result.get("intent", "CONVERSATION")
+        content = result.get("content", transcript)
+
+        if intent in _CAPTURE_INTENTS:
+            stage_capture(user_id, content, intent)
+            session_logs.setdefault(user_id, []).append(f"USER (vocal) : {transcript}")
+            session_logs[user_id].append(f"[{intent}] {content}")
+            await update.message.reply_text(f"_{transcript}_\n\nNoté.", parse_mode="Markdown")
+        elif intent == "TACHE":
+            _dispatch_tache(content)
+            session_logs.setdefault(user_id, []).append(f"USER (vocal) : {transcript}")
+            session_logs[user_id].append(f"[TACHE] {content}")
+            await update.message.reply_text(f"_{transcript}_\n\n📋 Tâche ajoutée aux fils ouverts.", parse_mode="Markdown")
+        else:
+            reply = await ask_claude(transcript, user_id)
+            await update.message.reply_text(f"_{transcript}_\n\n{reply}", parse_mode="Markdown")
     except Exception as e:
         log.error(f"Erreur voice : {e}")
         await update.message.reply_text("Erreur lors du traitement vocal. Réessaie.")
@@ -690,37 +864,39 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_command_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/save — extrait la mémoire de la session et demande validation."""
+    """/save — analyse intelligente et demande validation avant écriture."""
     user_id = update.effective_user.id
 
-    if not conversations.get(user_id):
-        await update.message.reply_text("Pas de conversation à sauvegarder.")
+    if not conversations.get(user_id) and not staged_captures.get(user_id):
+        await update.message.reply_text("Rien à sauvegarder.")
         return
 
     await update.message.chat.send_action("typing")
     await update.message.reply_text("J'analyse la session...")
 
-    extracted = await extract_memory(user_id)
-
-    if extracted == "RIEN_A_RETENIR":
-        await update.message.reply_text("Rien de notable à retenir dans cette session.")
+    try:
+        result = await save_intelligently(user_id)
+    except Exception as e:
+        log.error(f"save_intelligently échoué : {e}")
+        await update.message.reply_text(f"Erreur lors de l'analyse : {e}")
         return
 
-    pending_memory[user_id] = extracted
+    ops     = result.get("ops", [])
+    summary = result.get("summary", "")
 
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Sauvegarder", callback_data="mem_save"),
-            InlineKeyboardButton("🗑 Ignorer",     callback_data="mem_discard"),
-        ],
-        [InlineKeyboardButton("✏️ Modifier (réponds en texte libre)", callback_data="mem_edit")]
-    ])
+    if not ops:
+        await update.message.reply_text(f"Rien de notable à retenir.\n\n{summary}")
+        return
 
-    await update.message.reply_text(
-        f"Voici ce que je retiens de cette session :\n\n{extracted}\n\n"
-        "Je sauvegarde dans ta mémoire ?",
-        reply_markup=keyboard
-    )
+    pending_save_ops[user_id] = result
+
+    keyboard = InlineKeyboardMarkup([[
+        InlineKeyboardButton("✅ Exécuter", callback_data="mem_save"),
+        InlineKeyboardButton("🗑 Annuler",  callback_data="mem_discard"),
+    ]])
+
+    plan = format_ops_plan(ops, summary)
+    await update.message.reply_text(plan + "\n\nJe sauvegarde ?", reply_markup=keyboard)
 
 
 async def handle_memory_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -730,62 +906,46 @@ async def handle_memory_callback(update: Update, context: ContextTypes.DEFAULT_T
     await query.answer()
 
     if query.data == "mem_save":
-        extracted = pending_memory.pop(user_id, None)
-        if extracted:
+        result = pending_save_ops.pop(user_id, None)
+        if result:
             save_raw_log(user_id)
-            append_to_memory(extracted)
+            modified = execute_ops(result.get("ops", []))
+            staged_captures.pop(user_id, None)
+            STAGING_FILE.write_text(json.dumps(
+                {str(k): v for k, v in staged_captures.items()},
+                ensure_ascii=False, indent=2,
+            ))
             conversations[user_id] = []
-            session_logs[user_id] = []
-            await query.edit_message_text("✅ Sauvegardé dans ta mémoire. Session réinitialisée.")
+            session_logs[user_id]  = []
+            n = len(modified)
+            await query.edit_message_text(f"✅ {n} fichier(s) mis à jour. Session réinitialisée.")
         else:
             await query.edit_message_text("Rien à sauvegarder.")
 
     elif query.data == "mem_discard":
-        pending_memory.pop(user_id, None)
-        await query.edit_message_text("🗑 Ignoré. La session continue.")
-
-    elif query.data == "mem_edit":
-        await query.edit_message_text(
-            f"Extraction actuelle :\n\n{pending_memory.get(user_id, '')}\n\n"
-            "Envoie ta version corrigée en texte."
-        )
-
-
-async def handle_memory_freetext(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
-    """Reçoit la version corrigée de l'extraction."""
-    user_id = update.effective_user.id
-    pending_memory[user_id] = text
-
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Sauvegarder", callback_data="mem_save"),
-            InlineKeyboardButton("🗑 Ignorer",     callback_data="mem_discard"),
-        ]
-    ])
-    await update.message.reply_text(
-        f"Version mise à jour :\n\n{text}\n\nJe sauvegarde ?",
-        reply_markup=keyboard
-    )
+        pending_save_ops.pop(user_id, None)
+        await query.edit_message_text("🗑 Annulé. La session continue.")
 
 
 async def handle_command_reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/reset — remet à zéro sans sauvegarder."""
+    """/reset — remet à zéro sans sauvegarder (captures stagées conservées)."""
     user_id = update.effective_user.id
-    conversations[user_id] = []
-    pending_memory.pop(user_id, None)
-    session_logs[user_id] = []
-    await update.message.reply_text("Session réinitialisée.")
+    conversations[user_id]  = []
+    session_logs[user_id]   = []
+    pending_save_ops.pop(user_id, None)
+    await update.message.reply_text("Session réinitialisée. Les captures stagées sont conservées.")
 
 
 async def handle_command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/status — résumé de la session en cours."""
-    user_id = update.effective_user.id
-    count = len(conversations.get(user_id, [])) // 2
-    await update.message.reply_text(
-        f"{count} échange(s) dans la session.\n"
-        "/save pour extraire et sauvegarder.\n"
-        "/reset pour repartir à zéro."
-    )
+    user_id  = update.effective_user.id
+    exchanges = len(conversations.get(user_id, [])) // 2
+    staged    = len(staged_captures.get(user_id, []))
+    lines = [f"{exchanges} échange(s) dans la session."]
+    if staged:
+        lines.append(f"{staged} capture(s) stagée(s) en attente.")
+    lines += ["/save pour organiser et sauvegarder.", "/reset pour repartir à zéro."]
+    await update.message.reply_text("\n".join(lines))
 
 
 # ── Heartbeat matinal ────────────────────────────────────────────────────────
@@ -925,13 +1085,26 @@ def _heartbeat_loop():
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 
+async def on_startup(app):
+    has_staged = load_staging()
+    if has_staged:
+        total = sum(len(v) for v in staged_captures.values())
+        try:
+            await app.bot.send_message(
+                chat_id=CHAT_ID,
+                text=f"♻️ {total} capture(s) rechargée(s) depuis la session précédente. /save pour les organiser.",
+            )
+        except Exception as e:
+            log.error(f"Notification staging au démarrage : {e}")
+
+
 def main():
     MEMORY_DIR.mkdir(parents=True, exist_ok=True)
     for path in [USER_MD, SOUL_MD, MEMORY_MD]:
         if not path.exists():
             log.warning(f"⚠️  Fichier manquant : {path}")
 
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(on_startup).build()
 
     app.add_handler(CommandHandler("reset",  handle_command_reset))
     app.add_handler(CommandHandler("save",   handle_command_save))
