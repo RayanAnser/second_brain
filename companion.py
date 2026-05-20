@@ -323,17 +323,6 @@ Règles :
 - En cas de doute : CONVERSATION"""
 
 
-def _parse_intent_json(raw: str) -> dict:
-    text = raw.strip()
-    # supprime toute fence markdown (```json ou ```) quelle que soit la position
-    text = text.replace("```json", "").replace("```", "").strip()
-    # extrait le premier {...} au cas où il reste du texte autour
-    start = text.find("{")
-    end   = text.rfind("}")
-    if start != -1 and end != -1:
-        text = text[start:end + 1]
-    return json.loads(text)
-
 
 async def classify_intent(text: str) -> dict:
     try:
@@ -343,12 +332,14 @@ async def classify_intent(text: str) -> dict:
             system=_INTENT_SYSTEM,
             messages=[{"role": "user", "content": text}],
         )
-        raw = response.content[0].text if response.content else ""
+        raw = response.content[0].text.strip()
         log.info(f"classify_intent raw={raw!r}")
-        if not raw.strip():
-            log.warning("classify_intent : réponse vide, fallback CONVERSATION.")
-            return {"intent": "CONVERSATION", "slug": "", "content": ""}
-        result = _parse_intent_json(raw)
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        result = json.loads(raw)
         log.info(f"classify_intent → intent={result.get('intent')!r} slug={result.get('slug')!r}")
         return result
     except Exception as e:
