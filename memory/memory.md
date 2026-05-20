@@ -161,3 +161,19 @@
 - memory.md à alimenter au fil des sessions
 
 **Prochaine session** : Sprint 1 — pipeline de base
+
+### Session — 2026-05-20 21:25
+**Sujet principal** : Demande lecture roadmap Notion
+
+**Contexte :**
+- Utilisateur cherche à lire sa roadmap Notion → configuration NOTION_TOKEN manquante
+- Questions sur le nom du projet et les catégories de la roadmap (info non disponible dans la mémoire)
+
+**Capture projet (staging) :**
+- Stack complet documenté : Telegram + Groq Whisper + Claude Sonnet + MD local sur Railway
+- Prochaines étapes identifiées : NOTION_TOKEN .env + test Notion E2E, GitHub sync Railway, Sprint 6 (consolidation nocturne), Sprint 7 (RAG SQLite)
+- Enrichissement user.md (santé, apprentissage, réflexions) en attente
+
+**Fils ouverts :**
+- Roadmap Notion : contenu et structure non documentés dans la mémoire
+- Configuration Notion requise pour accès automatique (NOTION_TOKEN + NOTION_PAGES alias)

@@ -55,7 +55,7 @@ PROJETS_DIR     = MEMORY_DIR / "projets"
 CONCEPTS_DIR    = MEMORY_DIR / "concepts"
 PERSO_DIR       = MEMORY_DIR / "perso"
 STAGING_FILE    = MEMORY_DIR / "staging.json"
-COMMANDS_MD     = MEMORY_DIR / "commands.md"
+COMMANDS_MD     = MEMORY_DIR / "COMMANDS.md"
 
 # ── Clients ──────────────────────────────────────────────────────────────────
 claude = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
