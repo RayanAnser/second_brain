@@ -7,7 +7,8 @@
 ---
 
 ## Identité & rôle
-
+- **Prénom** : Rayän
+- **Âge** : 30 ans
 - **Métier** : AI Product Builder / Product Owner IA
 - **Contexte** : Cabinet de conseil
 - **Langue de travail** : Français (parfois anglais en contexte technique)

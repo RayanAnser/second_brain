@@ -528,7 +528,7 @@ def notion_search(query: str) -> list[dict]:
             # page : titre dans obj["properties"]["title"]["title"]
             rich = obj.get("properties", {}).get("title", {}).get("title", [])
         title = "".join(t.get("plain_text", "") for t in rich) or "(sans titre)"
-        results.append({"id": obj["id"], "title": title})
+        results.append({"id": obj["id"], "title": title, "type": obj.get("object", "page")})
     return results
 
 
@@ -936,6 +936,38 @@ async def handle_command_reset(update: Update, context: ContextTypes.DEFAULT_TYP
     await update.message.reply_text("Session réinitialisée. Les captures stagées sont conservées.")
 
 
+async def handle_command_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/help — envoie le contenu de COMMANDS.md sans passer par Claude."""
+    if not COMMANDS_MD.exists():
+        await update.message.reply_text("Fichier d'aide introuvable (memory/commands.md).")
+        return
+
+    text = COMMANDS_MD.read_text()
+    limit = 4096
+
+    if len(text) <= limit:
+        await update.message.reply_text(text)
+        return
+
+    # Découpe sur les doubles sauts de ligne pour ne pas couper en plein paragraphe
+    paragraphs = text.split("\n\n")
+    chunk = ""
+    for para in paragraphs:
+        candidate = (chunk + "\n\n" + para).lstrip("\n") if chunk else para
+        if len(candidate) <= limit:
+            chunk = candidate
+        else:
+            if chunk:
+                await update.message.reply_text(chunk)
+            # Paragraphe seul trop long → découpe brute à la limite
+            while len(para) > limit:
+                await update.message.reply_text(para[:limit])
+                para = para[limit:]
+            chunk = para
+    if chunk:
+        await update.message.reply_text(chunk)
+
+
 async def handle_command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/status — résumé de la session en cours."""
     user_id  = update.effective_user.id
@@ -1106,6 +1138,7 @@ def main():
 
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(on_startup).build()
 
+    app.add_handler(CommandHandler("help",   handle_command_help))
     app.add_handler(CommandHandler("reset",  handle_command_reset))
     app.add_handler(CommandHandler("save",   handle_command_save))
     app.add_handler(CommandHandler("status", handle_command_status))

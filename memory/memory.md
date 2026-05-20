@@ -44,14 +44,10 @@
 ---
 
 ## 🟡 Idées en suspens
-
-> Idées capturées mais pas encore actionnées. Chaque idée a une date — si elle dort trop longtemps, relance.
-
 | Date | Idée | Domaine | Statut |
 |------|------|---------|--------|
+| 2026-05-20 | Intégration Google Calendar et Proton pour synchroniser les calendriers | Compagnon IA | Capturé |
 | — | — | — | — |
-
----
 
 ## 🟢 Décisions prises
 
@@ -77,12 +73,57 @@
 ---
 
 ## 📋 Log des sessions
+### Session — 2026-05-20 21:04
+**Idées capturées :**
+- Intégration Google Calendar et Proton pour synchronisation calendriers
+
+**Contexte :**
+- Session de découverte initiale — utilisateur demande les capacités du compagnon
+- Capture d'informations personnelles (prénom, âge)
+
+**Fils ouverts :**
+- Aucun projet lancé ou décision prise — attente de direction utilisateur
+
 ### Session — 2026-05-20 20:10
 **Idées capturées :**
 - Connexion Google Calendar pour relances automatiques (avant événements + suivi projets inactifs)
 
 **Fils ouverts :**
 - Intégration Google Calendar : spécifications exactes à définir (type de relances, fréquence, critères de déclenchement)
+
+### Session — 2026-05-18 21:16
+**Projets mis à jour :**
+- Agent de traduction → attente architecture globale + clarification du blocage actuel
+- Agent d'automatisation administrative → nouveau projet capturé, statut : idée
+
+**Fils ouverts :**
+- Quelles sont les 2-3 tâches administratives concrètes qui bouffent du temps actuellement ?
+- Quel est le blocage précis sur l'agent de traduction (pas ce qui manque, mais ce qui empêche d'avancer) ?
+
+### Session — 2026-05-18 21:09
+**Fils ouverts :**
+- Agent de traduction : ordre de construction entre mémoire de traduction (cohérence terminologique) et adaptation contextuelle (qualité de traduction) — décision en attente
+- Clarifier si contraintes projet existantes imposent un ordre de priorité
+
+### Session — [DATE À REMPLIR]
+**Sujet principal** : Framing du compagnon IA personnel
+**Ce qui a été décidé** :
+- Architecture cible définie (Obsidian + Claude Code + Telegram + Whisper)
+- user.md créé avec profil cognitif WAIS-4 intégré
+- soul.md créé — personnalité : structurant + challengeur, anti-validation
+- memory.md créé — structure de mémoire persistante
+
+**Idées capturées** :
+- Inspiration : vidéo Cole Medin "AI Second Brain with Claude Code"
+- Concept clé retenu : "Triade létale" OpenClaw → construire sa propre solution pour garder le contrôle
+- Architecture mémoire : soul.md + user.md + memory.md + daily logs + RAG SQLite
+
+**Fils ouverts** :
+- Export ChatGPT en attente → enrichir user.md quand reçu
+- Pipeline technique à construire (Sprint 1 : Telegram → Whisper → Claude)
+- memory.md à alimenter au fil des sessions
+
+**Prochaine session** : Sprint 1 — pipeline de base
 
 ### Session — 2026-05-18 21:16
 **Projets mis à jour :**
