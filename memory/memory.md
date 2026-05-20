@@ -77,6 +77,13 @@
 ---
 
 ## 📋 Log des sessions
+### Session — 2026-05-20 20:10
+**Idées capturées :**
+- Connexion Google Calendar pour relances automatiques (avant événements + suivi projets inactifs)
+
+**Fils ouverts :**
+- Intégration Google Calendar : spécifications exactes à définir (type de relances, fréquence, critères de déclenchement)
+
 ### Session — 2026-05-18 21:16
 **Projets mis à jour :**
 - Agent de traduction → attente architecture globale + clarification du blocage actuel

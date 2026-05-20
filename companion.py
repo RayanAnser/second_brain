@@ -324,16 +324,10 @@ Règles :
 
 
 def _parse_intent_json(raw: str) -> dict:
-    """Extrait le JSON d'une réponse Haiku potentiellement enveloppée en markdown."""
     text = raw.strip()
-    # strip ```json ... ``` ou ``` ... ```
-    if text.startswith("```"):
-        lines = text.splitlines()
-        text = "\n".join(
-            line for line in lines
-            if not line.startswith("```")
-        ).strip()
-    # extraire le premier {...} si du texte précède
+    # supprime toute fence markdown (```json ou ```) quelle que soit la position
+    text = text.replace("```json", "").replace("```", "").strip()
+    # extrait le premier {...} au cas où il reste du texte autour
     start = text.find("{")
     end   = text.rfind("}")
     if start != -1 and end != -1:
@@ -354,7 +348,9 @@ async def classify_intent(text: str) -> dict:
         if not raw.strip():
             log.warning("classify_intent : réponse vide, fallback CONVERSATION.")
             return {"intent": "CONVERSATION", "slug": "", "content": ""}
-        return _parse_intent_json(raw)
+        result = _parse_intent_json(raw)
+        log.info(f"classify_intent → intent={result.get('intent')!r} slug={result.get('slug')!r}")
+        return result
     except Exception as e:
         log.warning(f"classify_intent échoué ({e}), fallback CONVERSATION.")
         return {"intent": "CONVERSATION", "slug": "", "content": ""}
