@@ -16,3 +16,6 @@ Avignon, Vaucluse
 - Père : Mohamed
 - Cousine : Noémie
 - Tante : Louisette
+
+## Agenda
+- **Mardi 9 juin 2026, 17h** : Rendez-vous avec Ségolène
