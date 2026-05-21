@@ -223,6 +223,7 @@
 - Supprimer l'agent de traduction de la liste
 
 
+- Mardi 9 juin à 17h : rendez-vous avec Ségolène
 ### Session — 2026-05-20 21:32
 **Sujet principal** : Check rapide identité
 
