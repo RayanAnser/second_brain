@@ -117,11 +117,21 @@ def load_context() -> str:
     return "\n\n".join(parts)
 
 
-def build_system_prompt() -> str:
+def build_system_prompt(extra_files: list[Path] = []) -> str:
+    extra = ""
+    if extra_files:
+        parts = []
+        for path in extra_files:
+            if path.exists():
+                rel = path.relative_to(MEMORY_DIR.parent)
+                parts.append(f"<MEMORY_FILE path=\"{rel}\">\n{path.read_text()}\n</MEMORY_FILE>")
+        if parts:
+            extra = "\n\n" + "\n\n".join(parts)
+
     return f"""Tu es le compagnon IA personnel de l'utilisateur.
 Voici ton contexte complet — lis-le attentivement avant chaque réponse.
 
-{load_context()}
+{load_context()}{extra}
 
 ---
 Règles absolues :
@@ -471,6 +481,54 @@ async def classify_intent(text: str) -> dict:
         return {"intent": "CONVERSATION", "slug": "", "content": ""}
 
 
+def _list_memory_files() -> list[tuple[str, Path]]:
+    entries = []
+    for subdir, name in [(PROJETS_DIR, "projets"), (CONCEPTS_DIR, "concepts"), (PERSO_DIR, "perso")]:
+        if not subdir.exists():
+            continue
+        for f in sorted(subdir.glob("*.md")):
+            entries.append((f"memory/{name}/{f.name}", f))
+    return entries
+
+
+async def select_memory_files(text: str) -> list[Path]:
+    """Identifie les fichiers mémoire pertinents pour une question donnée."""
+    available = _list_memory_files()
+    if not available:
+        return []
+
+    file_list = "\n".join(f"- {label}" for label, _ in available)
+    try:
+        response = claude.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            system=(
+                "Tu sélectionnes les fichiers mémoire pertinents pour répondre à une question.\n"
+                "Retourne UNIQUEMENT du JSON valide : {\"files\": [\"memory/...\", ...]}\n"
+                "Retourne une liste vide si aucun fichier n'est pertinent.\n"
+                "Ne retourne que les fichiers vraiment utiles pour répondre."
+            ),
+            messages=[{
+                "role": "user",
+                "content": f"Question : {text}\n\nFichiers disponibles :\n{file_list}",
+            }],
+        )
+        raw = response.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        selected = json.loads(raw).get("files", [])
+        label_to_path = {label: path for label, path in available}
+        result = [label_to_path[s] for s in selected if s in label_to_path]
+        log.info(f"select_memory_files → {[p.name for p in result]}")
+        return result
+    except Exception as e:
+        log.warning(f"select_memory_files échoué ({e}), extra_files=[].")
+        return []
+
+
 def _append_to_section(file_path: Path, section: str, line: str):
     """Insère '- line' sous '## section', crée la section si absente."""
     content = file_path.read_text() if file_path.exists() else ""
@@ -749,7 +807,7 @@ async def transcribe_voice(file_path: str) -> str:
 
 # ── Claude conversation ──────────────────────────────────────────────────────
 
-async def ask_claude(user_message: str, user_id: int) -> str:
+async def ask_claude(user_message: str, user_id: int, extra_files: list[Path] = []) -> str:
     history = conversations.setdefault(user_id, [])
     history.append({"role": "user", "content": user_message})
     session_logs.setdefault(user_id, []).append(f"USER : {user_message}")
@@ -757,7 +815,7 @@ async def ask_claude(user_message: str, user_id: int) -> str:
     response = claude.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=1024,
-        system=build_system_prompt(),
+        system=build_system_prompt(extra_files),
         messages=history
     )
 
@@ -819,7 +877,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        reply = await ask_claude(text, user_id)
+        extra_files = await select_memory_files(text)
+        reply = await ask_claude(text, user_id, extra_files)
         await update.message.reply_text(reply)
     except Exception as e:
         log.error(f"Erreur Claude : {e}")
@@ -854,7 +913,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             session_logs[user_id].append(f"[TACHE] {content}")
             await update.message.reply_text(f"_{transcript}_\n\n📋 Tâche ajoutée aux fils ouverts.", parse_mode="Markdown")
         else:
-            reply = await ask_claude(transcript, user_id)
+            extra_files = await select_memory_files(transcript)
+            reply = await ask_claude(transcript, user_id, extra_files)
             await update.message.reply_text(f"_{transcript}_\n\n{reply}", parse_mode="Markdown")
     except Exception as e:
         log.error(f"Erreur voice : {e}")

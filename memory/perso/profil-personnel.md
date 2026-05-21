@@ -14,3 +14,8 @@ Avignon, Vaucluse
 ---
 
 *Dernière mise à jour : 2026-05-21*
+
+## Famille
+- Mère : Djamila
+- Père : Mohamed
+- Tante : Louisette
