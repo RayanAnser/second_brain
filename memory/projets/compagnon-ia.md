@@ -44,6 +44,7 @@ Second cerveau personnel + mémoire persistante + interface voice-first en fran�
 - **Sprint 7** : RAG SQLite pour recherche dans la mémoire
 - Enrichir `user.md` avec l'export ChatGPT (santé, apprentissage, réflexions) — en attente de réception
 - Documenter la roadmap Notion (nom du projet, catégories) dans la mémoire
+- **Intégration Notion à faire** (capturé 2026-05-21)
 
 ## Log
 | Date | Événement |
