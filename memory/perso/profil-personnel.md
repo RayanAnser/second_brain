@@ -1,7 +1,7 @@
 # Profil personnel
 
 ## Parents
-- Mère : Djamila (orthographe confirmée : D-J-A-N-I-L-A)
+- Mère : Djamila
 - Père : Mohamed
 
 ## Origine
