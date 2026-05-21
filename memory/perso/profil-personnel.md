@@ -7,6 +7,10 @@
 ## Origine
 Avignon, Vaucluse
 
+## Nourriture
+- Aime beaucoup : steaks frites
+- Nourriture préférée : sushis
+
 ---
 
 *Dernière mise à jour : 2026-05-21*
