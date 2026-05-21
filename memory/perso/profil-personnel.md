@@ -18,4 +18,5 @@ Avignon, Vaucluse
 ## Famille
 - Mère : Djamila
 - Père : Mohamed
+- Cousine : Noémie
 - Tante : Louisette
