@@ -19,3 +19,8 @@ Avignon, Vaucluse
 
 ## Agenda
 - **Mardi 9 juin 2026, 17h** : Rendez-vous avec Ségolène
+
+## Amis
+- Charles
+- Louis
+- Victor
