@@ -7,8 +7,34 @@
 ---
 
 ## 🔴 Projets actifs
+## 🔴 Projets actifs
 
 > Ce sur quoi je travaille en ce moment. Mis à jour quand le statut change.
+
+### Agent de coding musical — Strudel
+- **Statut** : Expérimentation — en veille
+- **Contexte** : Live coding musical avec Strudel
+- **Dernière évolution** : —
+- **Prochaine étape** : Définir un premier cas d'usage concret (génération de pattern ? assistance en live ?)
+
+### Compagnon IA personnel (ce système)
+- **Statut** : Sprint 2 opérationnel — extraction mémoire + validation en place
+- **Contexte** : Second cerveau + mémoire persistante + voice-first français
+- **Dernière évolution** : companion.py Sprint 2 — transcription Groq, extraction auto, inline keyboard validation, logs de session
+- **Prochaine étape** : Stabiliser l'usage quotidien via Telegram ; enrichir user.md avec l'export ChatGPT (en attente) ; intégration Notion à faire
+- **Stack retenue** : Obsidian (mémoire locale) + Claude Code (cerveau) + Groq Whisper (voix) + Telegram (interface mobile) + Python (skills)
+
+### Agent d'automatisation administrative
+- **Statut** : Idée — non formalisée
+- **Contexte** : Automatiser des tâches administratives chronophages (périmètre à définir)
+- **Dernière évolution** : Capturé en session du 2026-05-18
+- **Prochaine étape** : Identifier les 2-3 tâches administratives concrètes qui bouffent le plus de temps
+
+### OpenClaw — exploration
+- **Statut** : Test local
+- **Contexte** : Testé avec interface Telegram
+- **Dernière évolution** : —
+- **Prochaine étape** : Évaluer l'intégration dans l'architecture compagnon
 
 ### Agent de traduction IA (pro)
 - **Statut** : En cours — bloqué
