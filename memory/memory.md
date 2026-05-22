@@ -308,3 +308,17 @@
 **Fils ouverts :**
 - Quel capital approfondir en priorité ?
 - Appliquer les concepts Bourdieu à un projet existant ?
+
+
+### Session — 2026-05-22 18:05
+**Sujet principal :** Amélioration système compagnon IA — deux axes identifiés
+
+**Captures stagées :**
+- Détection intentions : problème actuel = intentions détectées ne correspondent pas toujours aux attentes réelles, système passe à côté de la vraie demande
+- Architecture mémoire : besoin d'optimiser lecture concepts, organisation fichiers, architecture globale (système fonctionnel mais potentiel d'amélioration)
+
+**Décision :** Aucune pour l'instant — réflexion sur la priorisation entre les deux axes
+
+**Fils ouverts :**
+- Quel axe traiter en premier : intentions ou architecture ?
+- Comment analyser concrètement comment l'utilisateur réfléchit et formule ses demandes ?
