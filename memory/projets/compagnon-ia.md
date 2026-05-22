@@ -43,11 +43,11 @@ Second cerveau personnel + mémoire persistante + interface voice-first en fran�
 - Ordre de priorité MVP : mémoire persistante → relances → voice
 
 ## Prochaine étape
-- **Sprint 6 (consolidation nocturne)** : mécanisme de consolidation automatique de la mémoire — confirmé comme priorité 2026-05-22
-- **Amélioration desktop** : intégration et amélioration de l'expérience utilisateur de la version desktop v0.1.0
+## Prochaine étape
+- **Test 7 jours** : Envoyer un message vocal par jour pendant 7 jours, sans obligation de `/save`, juste pour tester la capture. Évaluer à la fin de la semaine si ça apporte quelque chose.
+- **Sprint 6 (consolidation nocturne)** : mécanisme de consolidation automatique de la mémoire
 - **Sprint 7** : RAG SQLite pour recherche dans la mémoire
-- Enrichir `user.md` avec l'export ChatGPT (santé, apprentissage, réflexions) — en attente de réception
-- Documenter la roadmap Notion (nom du projet, catégories) dans la mémoire
+- Enrichir `user.md` avec l'export ChatGPT (en attente)
 
 ## Log
 | Date | Événement |
