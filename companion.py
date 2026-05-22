@@ -30,6 +30,8 @@ from telegram.ext import (
 import anthropic
 from groq import Groq
 
+from research_pipeline import run_research
+
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -320,6 +322,18 @@ Règles :
 _CAPTURE_INTENTS = frozenset({"CAPTURE_IDEE", "CAPTURE_PROJET", "CAPTURE_CONCEPT", "CAPTURE_PERSO"})
 
 
+async def _research_task(slug: str, query: str, chat_id: int, bot):
+    try:
+        summary = await run_research(slug, query, MEMORY_DIR, claude)
+        await bot.send_message(chat_id=chat_id, text=summary, parse_mode="HTML")
+    except Exception as e:
+        log.error(f"_research_task échoué ({slug}) : {e}")
+        await bot.send_message(
+            chat_id=chat_id,
+            text=f"Recherche échouée pour «{slug}» : {e}",
+        )
+
+
 def stage_capture(user_id: int, content: str, hint: str):
     entry = {
         "content": content,
@@ -464,22 +478,23 @@ _INTENT_SYSTEM = """\
 Classifie le message utilisateur et retourne UNIQUEMENT du JSON valide, sans texte autour.
 
 Intentions disponibles :
-- CAPTURE_IDEE    : idée, insight, réflexion à noter
-- CAPTURE_PROJET  : info liée à un projet précis
-- CAPTURE_CONCEPT : définition ou explication d'un concept à retenir
-- CAPTURE_PERSO   : info personnelle, contexte de vie
-- TACHE           : action concrète à faire
-- NOTION_READ     : lire une page Notion (slug = nom de la page)
-- NOTION_APPEND   : ajouter du contenu à une page Notion existante (slug = page cible)
-- NOTION_CREATE   : créer une nouvelle page Notion (slug = titre de la nouvelle page)
-- CONVERSATION    : tout le reste (question, discussion, conseil)
+- CAPTURE_IDEE      : idée, insight, réflexion à noter
+- CAPTURE_PROJET    : info liée à un projet précis
+- CAPTURE_CONCEPT   : définition ou explication d'un concept à retenir
+- CAPTURE_PERSO     : info personnelle, contexte de vie
+- TACHE             : action concrète à faire
+- NOTION_READ       : lire une page Notion (slug = nom de la page)
+- NOTION_APPEND     : ajouter du contenu à une page Notion existante (slug = page cible)
+- NOTION_CREATE     : créer une nouvelle page Notion (slug = titre de la nouvelle page)
+- RESEARCH_REQUEST  : demande de recherche approfondie sur un sujet via NotebookLM (ex: "fais une recherche sur X", "explore le sujet Y", "crée un notebook sur Z")
+- CONVERSATION      : tout le reste (question, discussion, conseil)
 
 Format strict :
 {"intent": "...", "slug": "...", "content": "..."}
 
 Règles :
-- slug : kebab-case pour CAPTURE_* ; nom exact de la page pour NOTION_READ/APPEND ; titre lisible (avec majuscules, sans kebab) pour NOTION_CREATE ; vide "" pour IDEE/TACHE/CONVERSATION
-- content : version épurée et concise de l'info à retenir ; vide "" pour CONVERSATION et NOTION_READ
+- slug : kebab-case pour CAPTURE_* et RESEARCH_REQUEST ; nom exact de la page pour NOTION_READ/APPEND ; titre lisible pour NOTION_CREATE ; vide "" pour TACHE/CONVERSATION
+- content : version épurée et concise de l'info à retenir ; pour RESEARCH_REQUEST : requête de recherche précise en français ; vide "" pour CONVERSATION et NOTION_READ
 - En cas de doute : CONVERSATION"""
 
 
@@ -881,6 +896,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         session_logs.setdefault(user_id, []).append(f"USER : {text}")
         session_logs[user_id].append(f"[TACHE] {content}")
         await update.message.reply_text("📋 Tâche ajoutée aux fils ouverts.")
+        return
+
+    if intent == "RESEARCH_REQUEST":
+        effective_slug = slug or re.sub(r"[^a-z0-9]+", "-", (content or text).lower())[:40].strip("-")
+        effective_query = content or text
+        asyncio.create_task(
+            _research_task(effective_slug, effective_query, update.effective_chat.id, context.bot)
+        )
+        await update.message.reply_text(
+            f"🔍 Recherche lancée sur «{effective_slug}»...\nJe t'envoie la synthèse dans quelques minutes."
+        )
         return
 
     if intent in ("NOTION_READ", "NOTION_APPEND", "NOTION_CREATE"):
