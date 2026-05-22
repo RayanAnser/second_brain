@@ -7,7 +7,21 @@
 ---
 
 ## 🔴 Projets actifs
+## 🔴 Projets actifs
 > Ce sur quoi je travaille en ce moment. Mis à jour quand le statut change.
+
+### Compagnon IA personnel (ce système)
+- **Statut** : Sprint 5 terminé — intégrations opérationnelles (Notion, NotebookLM, GitHub Sync)
+- **Contexte** : Second cerveau + mémoire persistante + voice-first français
+- **Dernière évolution** : Notion Token configuré, recherche Notion intégrée, connexion NotebookLM opérationnelle, GitHub Sync fonctionnel
+- **Prochaine étape** : Sprint 6 (consolidation nocturne) — mécanisme de consolidation automatique de la mémoire
+- **Stack retenue** : Obsidian (mémoire locale) + Claude Code (cerveau) + Groq Whisper (voix) + Telegram (mobile) + Desktop v0.1.0 + Python (skills) + Notion + NotebookLM
+
+### Agent de coding musical — Strudel
+- **Statut** : Expérimentation — en veille
+- **Contexte** : Live coding musical avec Strudel
+- **Dernière évolution** : —
+- **Prochaine étape** : Définir un premier cas d'usage concret
 
 ### Compagnon IA personnel (ce système)
 - **Statut** : Sprint 3-5 en cours — v0.1.0 desktop opérationnelle
