@@ -337,3 +337,24 @@
 **Fils ouverts :**
 - Quel axe traiter en premier : intentions ou architecture ?
 - Comment analyser concrètement comment l'utilisateur réfléchit et formule ses demandes ?
+
+
+### Session — 2026-05-22 18:30
+**Sujet principal :** Bilan compagnon IA
+
+**État actuel :**
+- Stack complète opérationnelle (Telegram, Groq, Claude, MD local, Desktop v0.1.0)
+- Fonctionnalités actives : transcription voix, extraction mémoire, logs, commandes `/save`, `/reset`, `/status`
+- Intégrations configurées : Notion ✓, NotebookLM ✓, GitHub Sync ✓
+
+**Décisions prises :**
+- Retrait du projet Agent de traduction de la liste active (archivé)
+
+**Observation clé :**
+- Système techniquement fonctionnel mais pas encore utilisé quotidiennement de manière naturelle (2-3/10)
+- Utilisateur en phase d'exploration — évalue l'utilité et comment l'intégrer dans le workflow
+
+**Fils ouverts :**
+- Identifier le frein réel : technique (feature manquante) / habitude (interface pas fluide) / usage (pas clair concrètement) ?
+- Sprint 6 (consolidation nocturne) : toujours en attente
+- Sprint 7 (RAG SQLite) : roadmap claire, pas encore fait
