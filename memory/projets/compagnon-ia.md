@@ -44,12 +44,11 @@ Second cerveau personnel + mémoire persistante + interface voice-first en fran�
 
 ## Prochaine étape
 ## Prochaine étape
-- **Sprint 3-5 (actuel)** : Configuration Notion (NOTION_TOKEN .env + test E2E), GitHub sync Railway
-- **Sprint 6** : Consolidation nocturne automatique
+- **Sprint 6 (consolidation nocturne)** : mécanisme de consolidation automatique de la mémoire
 - **Sprint 7** : RAG SQLite pour recherche dans la mémoire
 - Enrichir `user.md` avec l'export ChatGPT (santé, apprentissage, réflexions) — en attente de réception
 - Documenter la roadmap Notion (nom du projet, catégories) dans la mémoire
-- **Intégration Notion à faire** (capturé 2026-05-21)
+- Stabiliser l'usage desktop v0.1.0
 
 ## Log
 | Date | Événement |
