@@ -70,7 +70,6 @@
 ---
 
 ## 🟡 Idées en suspens
-## 🟡 Idées en suspens
 | Date | Idée | Domaine | Statut |
 |------|------|---------|--------|
 | 2026-05-20 | Intégration Google Calendar et Proton pour synchroniser les calendriers | Compagnon IA | Capturé |
