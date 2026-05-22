@@ -100,16 +100,22 @@
 ---
 
 ## 📋 Log des sessions
-### Session — 2026-05-20 21:04
-**Idées capturées :**
-- Intégration Google Calendar et Proton pour synchronisation calendriers
+### Session — 2026-05-22 10:55
+**Sujet principal :** Physique quantique + injection d'infos personnelles
 
 **Contexte :**
-- Session de découverte initiale — utilisateur demande les capacités du compagnon
-- Capture d'informations personnelles (prénom, âge)
+- Utilisateur demande des explications sur la physique quantique (principes fondamentaux : dualité onde-particule, incertitude, superposition, intrication, effondrement fonction d'onde)
+- Demande de recherche web → pas de skill de recherche intégré actuellement
+- Question stratégique sur l'injection massive d'infos personnelles (à la Hermes Agent)
+
+**Idées capturées :**
+- Trois approches pour enrichir user.md : import massif initial (export ChatGPT, notes), observation passive (calendrier Google, emails, Notion), capture conversationnelle active
+- Utilisateur attend toujours l'export ChatGPT
 
 **Fils ouverts :**
-- Aucun projet lancé ou décision prise — attente de direction utilisateur
+- Quelle source d'infos prioriser pour enrichir user.md ? (ChatGPT export, calendrier Google, notes Keep/Notion)
+- Intégrer un skill de recherche web (Perplexity/Exa/Tavily) au compagnon ?
+- Injection massive : attendre ChatGPT ou commencer par calendrier/notes ?
 
 ### Session — 2026-05-20 20:10
 **Idées capturées :**
