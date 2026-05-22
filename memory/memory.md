@@ -10,11 +10,11 @@
 > Ce sur quoi je travaille en ce moment. Mis à jour quand le statut change.
 
 ### Compagnon IA personnel (ce système)
-- **Statut** : En amélioration continue — identification de deux axes d'optimisation
+- **Statut** : Sprint 3-5 en cours — v0.1.0 desktop opérationnelle
 - **Contexte** : Second cerveau + mémoire persistante + voice-first français
-- **Dernière évolution** : Deux problématiques identifiées : détection intentions (système ne capte pas toujours la vraie demande) + architecture mémoire (structure lecture/concepts/fichiers à optimiser)
-- **Prochaine étape** : Prioriser entre amélioration intentions et refonte architecture mémoire
-- **Stack retenue** : Obsidian (mémoire locale) + Claude Code (cerveau) + Groq Whisper (voix) + Telegram (interface mobile) + Python (skills)
+- **Dernière évolution** : Déploiement de la première version desktop (v0.1.0) en complément du système Telegram existant
+- **Prochaine étape** : Stabiliser l'usage desktop ; configuration Notion (NOTION_TOKEN) ; Sprint 6 (consolidation nocturne) ; Sprint 7 (RAG SQLite)
+- **Stack retenue** : Obsidian (mémoire locale) + Claude Code (cerveau) + Groq Whisper (voix) + Telegram (mobile) + Desktop v0.1.0 + Python (skills)
 
 ### Agent de coding musical — Strudel
 - **Statut** : Expérimentation — en veille
