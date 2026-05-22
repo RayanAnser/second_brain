@@ -6,9 +6,11 @@ Ajout : extraction mémoire automatique + validation + écriture dans memory.md
 
 import asyncio
 import base64
+import html
 import json
 import logging
 import os
+import re
 import tempfile
 import threading
 import time
@@ -34,6 +36,30 @@ logging.basicConfig(
     level=logging.INFO
 )
 log = logging.getLogger(__name__)
+
+
+def md_to_html(text: str) -> str:
+    """Convert Claude's Markdown output to Telegram HTML."""
+    # Escape HTML chars first, then re-add our own tags
+    text = html.escape(text, quote=False)
+    # Fenced code blocks (before inline code)
+    text = re.sub(
+        r'```(?:\w+)?\n(.*?)```',
+        lambda m: f'<pre>{m.group(1)}</pre>',
+        text, flags=re.DOTALL
+    )
+    # Inline code
+    text = re.sub(r'`([^`\n]+)`', r'<code>\1</code>', text)
+    # Bold
+    text = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', text, flags=re.DOTALL)
+    # Headers → bold (before italic to avoid * conflict)
+    text = re.sub(r'^#{1,6}\s+(.+)$', r'<b>\1</b>', text, flags=re.MULTILINE)
+    # Italic *text* (not touching ** already converted)
+    text = re.sub(r'(?<!\*)\*(?!\*)([^\n*]+?)(?<!\*)\*(?!\*)', r'<i>\1</i>', text)
+    # Italic _text_ (word boundaries to avoid snake_case breakage)
+    text = re.sub(r'(?<!\w)_([^_\n]+?)_(?!\w)', r'<i>\1</i>', text)
+    return text
+
 
 # ── Config ───────────────────────────────────────────────────────────────────
 TELEGRAM_TOKEN  = os.environ["TELEGRAM_TOKEN"]
@@ -461,7 +487,7 @@ Règles :
 async def classify_intent(text: str) -> dict:
     try:
         response = claude.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model="claude-sonnet-4-5",
             max_tokens=300,
             system=_INTENT_SYSTEM,
             messages=[{"role": "user", "content": text}],
@@ -500,7 +526,7 @@ async def select_memory_files(text: str) -> list[Path]:
     file_list = "\n".join(f"- {label}" for label, _ in available)
     try:
         response = claude.messages.create(
-            model="claude-haiku-4-5-20251001",
+            model="claude-sonnet-4-5",
             max_tokens=200,
             system=(
                 "Tu sélectionnes les fichiers mémoire pertinents pour répondre à une question.\n"
@@ -758,6 +784,7 @@ async def handle_notion_read(slug: str, user_message: str, user_id: int) -> str:
     if not obj:
         return f"Page Notion introuvable : « {slug} »."
     notion_content = _notion_read_content(obj)
+    log.info(f"Notion content ({len(notion_content)} chars) : {notion_content[:500]}")
     # Injecté en system prompt uniquement — ne pollue pas l'historique de conversation
     response = claude.messages.create(
         model="claude-sonnet-4-5",
@@ -860,7 +887,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if intent == "NOTION_READ":
                 reply = await handle_notion_read(slug, text, user_id)
-                await update.message.reply_text(reply)
+                await update.message.reply_text(md_to_html(reply), parse_mode="HTML")
             elif intent == "NOTION_APPEND":
                 confirm = await handle_notion_append(slug, content)
                 session_logs.setdefault(user_id, []).append(f"USER : {text}")
@@ -879,7 +906,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         extra_files = await select_memory_files(text)
         reply = await ask_claude(text, user_id, extra_files)
-        await update.message.reply_text(reply)
+        await update.message.reply_text(md_to_html(reply), parse_mode="HTML")
     except Exception as e:
         log.error(f"Erreur Claude : {e}")
         await update.message.reply_text("Erreur. Réessaie.")
@@ -906,16 +933,16 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             stage_capture(user_id, content, intent)
             session_logs.setdefault(user_id, []).append(f"USER (vocal) : {transcript}")
             session_logs[user_id].append(f"[{intent}] {content}")
-            await update.message.reply_text(f"_{transcript}_\n\nNoté.", parse_mode="Markdown")
+            await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\nNoté.", parse_mode="HTML")
         elif intent == "TACHE":
             _dispatch_tache(content)
             session_logs.setdefault(user_id, []).append(f"USER (vocal) : {transcript}")
             session_logs[user_id].append(f"[TACHE] {content}")
-            await update.message.reply_text(f"_{transcript}_\n\n📋 Tâche ajoutée aux fils ouverts.", parse_mode="Markdown")
+            await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n📋 Tâche ajoutée aux fils ouverts.", parse_mode="HTML")
         else:
             extra_files = await select_memory_files(transcript)
             reply = await ask_claude(transcript, user_id, extra_files)
-            await update.message.reply_text(f"_{transcript}_\n\n{reply}", parse_mode="Markdown")
+            await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n{md_to_html(reply)}", parse_mode="HTML")
     except Exception as e:
         log.error(f"Erreur voice : {e}")
         await update.message.reply_text("Erreur lors du traitement vocal. Réessaie.")
