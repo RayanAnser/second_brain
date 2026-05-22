@@ -20,10 +20,8 @@
 - **Intérêts** : Football
 
 ## Projets en cours
-
-- **Agent de traduction IA** — projet pro au cabinet
-- **Agent de coding musical** — expérimentation avec Strudel (live coding musical)
 - **Compagnon IA personnel** — ce système lui-même (second cerveau + mémoire persistante)
+- **Agent de coding musical** — expérimentation avec Strudel (live coding musical)
 - **Tests OpenClaw** — exploration en local avec interface Telegram
 
 ## Comment je fonctionne
