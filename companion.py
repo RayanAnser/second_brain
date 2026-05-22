@@ -324,8 +324,17 @@ _CAPTURE_INTENTS = frozenset({"CAPTURE_IDEE", "CAPTURE_PROJET", "CAPTURE_CONCEPT
 
 async def _research_task(slug: str, query: str, chat_id: int, bot):
     try:
-        summary = await run_research(slug, query, MEMORY_DIR, claude)
-        await bot.send_message(chat_id=chat_id, text=summary, parse_mode="HTML")
+        result = await run_research(slug, query, MEMORY_DIR, claude)
+        await bot.send_message(chat_id=chat_id, text=result.summary, parse_mode="HTML")
+        await bot.send_document(
+            chat_id=chat_id,
+            document=result.concept_file.open("rb"),
+            filename=result.concept_file.name,
+        )
+        await bot.send_message(
+            chat_id=chat_id,
+            text=f"📓 Notebook complet : {result.notebook_url}",
+        )
     except Exception as e:
         log.error(f"_research_task échoué ({slug}) : {e}")
         await bot.send_message(
@@ -1093,6 +1102,170 @@ async def handle_command_status(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text("\n".join(lines))
 
 
+_DOC_SUBDIRS   = [("projets", PROJETS_DIR), ("concepts", CONCEPTS_DIR), ("perso", PERSO_DIR)]
+_DOC_PAGE_SIZE = 10
+_DOC_MAX       = 30  # cap for keyword search (no pagination)
+
+
+def _is_active_project(path: Path) -> bool:
+    try:
+        content = path.read_text().lower()
+        return any(kw in content for kw in ("en cours", "actif", "🟢"))
+    except OSError:
+        return False
+
+
+# cat → (display label, directory, optional file filter)
+_DOC_CATEGORIES: dict[str, tuple[str, Path, object]] = {
+    "projets":  ("📁 projets",          PROJETS_DIR,  None),
+    "concepts": ("🧠 concepts",         CONCEPTS_DIR, None),
+    "perso":    ("👤 perso",            PERSO_DIR,    None),
+    "actifs":   ("🔴 projets actifs",   PROJETS_DIR,  _is_active_project),
+}
+
+
+def _list_doc_files(keyword: str = "") -> list[tuple[str, Path]]:
+    """All files across subdirs, optionally filtered by keyword in filename."""
+    entries: list[tuple[str, Path]] = []
+    for subdir, directory in _DOC_SUBDIRS:
+        if not directory.exists():
+            continue
+        for f in sorted(directory.glob("*.md")):
+            key = f"{subdir}/{f.name}"
+            if not keyword or keyword.lower() in key.lower():
+                entries.append((key, f))
+    return entries
+
+
+def _get_cat_files(cat: str) -> list[tuple[str, Path]]:
+    """Files for a given category, applying its filter if any."""
+    label, directory, filter_fn = _DOC_CATEGORIES[cat]
+    if not directory.exists():
+        return []
+    subdir = "projets" if cat == "actifs" else cat  # actifs share projets/ on disk
+    files = sorted(directory.glob("*.md"))
+    if filter_fn:
+        files = [f for f in files if filter_fn(f)]  # type: ignore[operator]
+    return [(f"{subdir}/{f.name}", f) for f in files]
+
+
+def _build_cat_menu() -> InlineKeyboardMarkup:
+    rows: list[list[InlineKeyboardButton]] = []
+    items = list(_DOC_CATEGORIES.items())
+    for i in range(0, len(items), 2):
+        row = []
+        for cat, (label, _, __) in items[i:i + 2]:
+            n = len(_get_cat_files(cat))
+            row.append(InlineKeyboardButton(f"{label} ({n})", callback_data=f"doc_cat_{cat}"))
+        rows.append(row)
+    return InlineKeyboardMarkup(rows)
+
+
+def _build_file_page(
+    cat: str,
+    entries: list[tuple[str, Path]],
+    page: int,
+) -> tuple[str, InlineKeyboardMarkup]:
+    label = _DOC_CATEGORIES[cat][0]
+    total = len(entries)
+    total_pages = max(1, (total + _DOC_PAGE_SIZE - 1) // _DOC_PAGE_SIZE)
+    start = page * _DOC_PAGE_SIZE
+    shown = entries[start:start + _DOC_PAGE_SIZE]
+
+    header = f"{label} — {total} fichier(s)"
+    if total_pages > 1:
+        header += f" (page {page + 1}/{total_pages})"
+
+    rows: list[list[InlineKeyboardButton]] = []
+    for i in range(0, len(shown), 2):
+        row = []
+        for key, path in shown[i:i + 2]:
+            size_kb = path.stat().st_size / 1024
+            label_btn = f"📄 {path.stem} ({size_kb:.1f} KB)"
+            row.append(InlineKeyboardButton(label_btn, callback_data=f"doc_{key}"))
+        rows.append(row)
+
+    nav: list[InlineKeyboardButton] = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("◀ Précédent", callback_data=f"doc_pg_{cat}_{page - 1}"))
+    if start + _DOC_PAGE_SIZE < total:
+        nav.append(InlineKeyboardButton("Suivant ▶", callback_data=f"doc_pg_{cat}_{page + 1}"))
+    if nav:
+        rows.append(nav)
+
+    return header, InlineKeyboardMarkup(rows)
+
+
+async def handle_command_docs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/docs → menu catégories  |  /docs <keyword> → filtre tous les fichiers."""
+    keyword = " ".join(context.args).strip() if context.args else ""
+
+    if not keyword:
+        await update.message.reply_text("📂 Mes documents mémoire", reply_markup=_build_cat_menu())
+        return
+
+    entries = _list_doc_files(keyword)
+    if not entries:
+        await update.message.reply_text(f"Aucun fichier trouvé pour « {keyword} ».")
+        return
+
+    shown = entries[:_DOC_MAX]
+    rows: list[list[InlineKeyboardButton]] = []
+    for i in range(0, len(shown), 2):
+        row = []
+        for key, path in shown[i:i + 2]:
+            size_kb = path.stat().st_size / 1024
+            row.append(InlineKeyboardButton(
+                f"📄 {path.stem} ({size_kb:.1f} KB)",
+                callback_data=f"doc_{key}",
+            ))
+        rows.append(row)
+
+    header = f"🔍 {len(shown)} fichier(s) · « {keyword} »"
+    if len(entries) > _DOC_MAX:
+        header += f"\n⚠️ {len(entries)} résultats, affichage limité à {_DOC_MAX}. Précise ta recherche."
+
+    await update.message.reply_text(header, reply_markup=InlineKeyboardMarkup(rows))
+
+
+async def handle_doc_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    data  = query.data
+
+    if data.startswith("doc_cat_"):
+        cat     = data[len("doc_cat_"):]
+        entries = _get_cat_files(cat)
+        if not entries:
+            await query.edit_message_text("Aucun fichier dans cette catégorie.")
+            return
+        header, markup = _build_file_page(cat, entries, 0)
+        await query.edit_message_text(header, reply_markup=markup)
+
+    elif data.startswith("doc_pg_"):
+        # format: doc_pg_<cat>_<page>  — page is always last token
+        rest       = data[len("doc_pg_"):]
+        page_str   = rest.rsplit("_", 1)[-1]
+        cat        = rest[: -(len(page_str) + 1)]
+        page       = int(page_str)
+        entries    = _get_cat_files(cat)
+        header, markup = _build_file_page(cat, entries, page)
+        await query.edit_message_text(header, reply_markup=markup)
+
+    else:
+        rel_key = data[len("doc_"):]
+        path    = MEMORY_DIR / rel_key
+        if not path.exists():
+            await query.message.reply_text(f"Fichier introuvable : {rel_key}")
+            return
+        await query.message.reply_document(
+            document=path.open("rb"),
+            filename=path.name,
+            caption=f"`{rel_key}`",
+            parse_mode="Markdown",
+        )
+
+
 # ── Heartbeat matinal ────────────────────────────────────────────────────────
 
 STALE_THREAD_DAYS = 3
@@ -1256,7 +1429,9 @@ def main():
     app.add_handler(CommandHandler("save",   handle_command_save))
     app.add_handler(CommandHandler("status", handle_command_status))
     app.add_handler(CommandHandler("update", handle_command_update))
+    app.add_handler(CommandHandler("docs",   handle_command_docs))
     app.add_handler(CallbackQueryHandler(handle_user_callback,   pattern="^usr_"))
+    app.add_handler(CallbackQueryHandler(handle_doc_callback,    pattern="^doc_"))
     app.add_handler(CallbackQueryHandler(handle_memory_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))

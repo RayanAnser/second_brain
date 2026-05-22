@@ -7,11 +7,23 @@ Used by both companion.py (on-demand via Telegram) and research_agent.py (cron).
 
 import logging
 import re
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 import anthropic
 from notebooklm import NotebookLMClient
+
+
+@dataclass
+class ResearchResult:
+    summary: str       # HTML-formatted summary for Telegram
+    concept_file: Path # path to memory/concepts/<slug>.md
+    notebook_id: str   # NotebookLM notebook ID
+
+    @property
+    def notebook_url(self) -> str:
+        return f"https://notebooklm.google.com/notebook/{self.notebook_id}"
 
 log = logging.getLogger(__name__)
 
@@ -107,8 +119,8 @@ async def run_research(
     query: str,
     memory_dir: Path,
     claude_client: anthropic.Anthropic,
-) -> str:
-    """Full pipeline. Returns a short summary string for Telegram."""
+) -> ResearchResult:
+    """Full pipeline. Returns a ResearchResult with summary, concept_file, and notebook_id."""
     log.info(f"research_pipeline: démarrage slug={slug!r}")
 
     # 1. Web search → URLs
@@ -145,14 +157,15 @@ async def run_research(
         log.info(f"research_pipeline: synthèse reçue ({len(synthesis)} chars)")
 
     # 3. Write memory/concepts/<slug>.md
-    _write_concept(slug, urls, synthesis, notebook_id, memory_dir)
+    concept_file = _write_concept(slug, urls, synthesis, notebook_id, memory_dir)
 
-    # 4. Short summary for Telegram
+    # 4. Build summary
     preview = synthesis[:500].rstrip()
     if len(synthesis) > 500:
         preview += "…"
-    return (
+    summary = (
         f"📚 <b>{slug}</b>\n\n"
         f"{preview}\n\n"
         f"<i>Sources : {len(urls)} · concept enregistré dans memory/concepts/{slug}.md</i>"
     )
+    return ResearchResult(summary=summary, concept_file=concept_file, notebook_id=notebook_id)

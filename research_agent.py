@@ -141,7 +141,8 @@ async def main_async():
             continue
         try:
             log.info(f"Traitement de {slug!r}…")
-            await run_research(slug, query, MEMORY_DIR, claude)
+            result = await run_research(slug, query, MEMORY_DIR, claude)
+            log.info(f"{slug} : notebook {result.notebook_url}")
             done.append(slug)
             log.info(f"{slug} : OK")
         except Exception as e:
