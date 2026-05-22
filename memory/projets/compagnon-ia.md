@@ -1,7 +1,7 @@
 # Compagnon IA personnel
 
 ## Statut
-**Sprint 2 opérationnel**
+**Sprint 3-5 en cours — v0.1.0 desktop déployée**
 
 ## Contexte
 Second cerveau personnel + mémoire persistante + interface voice-first en français. Inspiré par la vidéo Cole Medin "AI Second Brain with Claude Code" et le concept de "Triade létale" OpenClaw (construire sa propre solution pour garder le contrôle).
