@@ -16,11 +16,16 @@ Second cerveau personnel + mémoire persistante + interface voice-first en fran�
 | Python (`companion.py`) | Glue technique |
 
 ## Ce qui est en place (Sprint 2)
+## Ce qui est en place (Sprints 2-5)
 - Transcription voix via Groq Whisper
 - Extraction automatique de mémoire en fin de session (`/save`)
 - Validation inline keyboard avant écriture dans `memory.md`
 - Logs de session dans `memory/logs/`
 - Commandes : `/save`, `/reset`, `/status`
+- **v0.1.0 desktop** : version desktop opérationnelle
+- **Intégration Notion** : Token configuré ✓, recherche Notion intégrée
+- **Intégration NotebookLM** : connexion recherche opérationnelle
+- **GitHub Sync** : opérationnel (pull code fonctionnel)
 
 ## Architecture mémoire
 | Fichier | Rôle |
