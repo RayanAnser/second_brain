@@ -7,9 +7,32 @@
 ---
 
 ## 🔴 Projets actifs
-## 🔴 Projets actifs
-
 > Ce sur quoi je travaille en ce moment. Mis à jour quand le statut change.
+
+### Compagnon IA personnel (ce système)
+- **Statut** : En amélioration continue — identification de deux axes d'optimisation
+- **Contexte** : Second cerveau + mémoire persistante + voice-first français
+- **Dernière évolution** : Deux problématiques identifiées : détection intentions (système ne capte pas toujours la vraie demande) + architecture mémoire (structure lecture/concepts/fichiers à optimiser)
+- **Prochaine étape** : Prioriser entre amélioration intentions et refonte architecture mémoire
+- **Stack retenue** : Obsidian (mémoire locale) + Claude Code (cerveau) + Groq Whisper (voix) + Telegram (interface mobile) + Python (skills)
+
+### Agent de coding musical — Strudel
+- **Statut** : Expérimentation — en veille
+- **Contexte** : Live coding musical avec Strudel
+- **Dernière évolution** : —
+- **Prochaine étape** : Définir un premier cas d'usage concret
+
+### Agent d'automatisation administrative
+- **Statut** : Idée — non formalisée
+- **Contexte** : Automatiser des tâches administratives chronophages
+- **Dernière évolution** : Capturé en session du 2026-05-18
+- **Prochaine étape** : Identifier les 2-3 tâches administratives concrètes qui bouffent le plus de temps
+
+### OpenClaw — exploration
+- **Statut** : Test local
+- **Contexte** : Testé avec interface Telegram
+- **Dernière évolution** : —
+- **Prochaine étape** : Évaluer l'intégration dans l'architecture compagnon
 
 ### Agent de coding musical — Strudel
 - **Statut** : Expérimentation — en veille
