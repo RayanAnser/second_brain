@@ -358,3 +358,23 @@
 - Identifier le frein réel : technique (feature manquante) / habitude (interface pas fluide) / usage (pas clair concrètement) ?
 - Sprint 6 (consolidation nocturne) : toujours en attente
 - Sprint 7 (RAG SQLite) : roadmap claire, pas encore fait
+
+
+### Session — 2026-05-22 18:39
+**Sujet principal :** Clarification identité du compagnon IA
+
+**Contexte :**
+- Question utilisateur : « J'aurais besoin d'en savoir plus sur mon compagnon RIA »
+- Clarification : le compagnon IA, c'est ce système lui-même (Obsidian + Claude Code + Telegram + Groq Whisper)
+- État actuel : stack complète opérationnelle, version desktop v0.1.0, intégrations Notion/NotebookLM/GitHub Sync
+
+**Captures stagées :**
+- [CAPTURE_IDEE] Système de monitoring consommation API/tokens (éviter surprises facturation AXA/autres services)
+- [CAPTURE_IDEE] Problème classification : trop de messages conversationnels classés en CAPTURE au lieu de CONVERSATION — besoin d'améliorer sensibilité détection CONVERSATION
+
+**Fils ouverts :**
+- Monitoring API/tokens : solution à définir
+- Classification intentions : améliorer la détection CONVERSATION vs CAPTURE
+
+**Observation :**
+- Utilisateur utilise « RIA » au lieu de « IA » — probablement une simple typo, pas une nouvelle terminologie à retenir
