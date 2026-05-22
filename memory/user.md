@@ -33,6 +33,27 @@
 - **Usage actuel du compagnon IA** : Début d'utilisation (2-3/10), pas encore d'habitude établie. Phase d'exploration — teste l'usage en capturant quelques idées pour évaluer l'utilité et comprendre comment l'intégrer dans le workflow quotidien.
 
 ## Outils que j'utilise
+### Capture (chaos actuel)
+- Google Keep — idées éparses, non organisées
+- Notes vocales — capturées, rarement retrouvées
+- Conversations IA — insights perdus à la fermeture
+
+### Organisation
+- Notion — commencé, pas vraiment structuré
+- GitHub — code et projets techniques
+- Pas de système de tâches fiable
+
+### Travail quotidien
+- Slack, Jira, Email
+- Google Slides, Google Sheets
+- Notion (équipe)
+
+### IA
+- Claude (principal), Gemini, NotebookLM
+- OpenClaw (en test local)
+
+### Problèmes identifiés
+- **Détection d'intention défaillante sur Notion** : système déclenche NOTION_READ alors que l'utilisateur veut une recherche ou réflexion (NotebookLM, web, discussion pure). Besoin de durcir la détection pour qu'elle ne se déclenche que sur mention explicite de Notion.
 
 ### Capture (chaos actuel)
 - Google Keep — idées éparses, non organisées
