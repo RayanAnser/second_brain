@@ -378,3 +378,7 @@
 
 **Observation :**
 - Utilisateur utilise « RIA » au lieu de « IA » — probablement une simple typo, pas une nouvelle terminologie à retenir
+
+
+| 2026-05-22 | Monitoring consommation API/tokens pour éviter surprises facturation (actuellement pas de visibilité) | Compagnon IA | Capturé |
+| 2026-05-22 | Améliorer classification intentions : trop de messages conversationnels classés CAPTURE — renforcer détection CONVERSATION | Compagnon IA | Capturé |
