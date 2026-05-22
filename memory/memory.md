@@ -401,3 +401,26 @@
 **Fils ouverts :**
 - Débloquer les projets en veille (Strudel, Agent admin) ou continuer sur Sprint 6 ?
 - Amélioration expérience desktop (prochaine itération à définir)
+
+### Session — 2026-05-22 23:33
+**Sujet principal :** Exploration OpenClaw / Hermes — clarification du besoin réel
+
+**Contexte :**
+- Recherche demandée sur OpenClaw / Hermes → clarification intégration Perplexity vs NotebookLM
+- Utilisateur confirme : NotebookLM suffit (cherche dans sources uploadées) ; Perplexity non nécessaire (recherche web temps réel)
+- Décision : ne pas ajouter Perplexity
+
+**Captures stagées :**
+- [CAPTURE_IDEE] Améliorer l'expérience desktop : réponses plus rapides, meilleure qualité de voix, expérience seamless et fluide (2026-05-22 23:27)
+- [CAPTURE_IDEE] Besoin d'un hub centralisé pour : capturer pensées et idées vocalement, lancer des recherches, exécuter des idées et récupérer l'output. Principe clé : tout centralisé, contrôle en backend. (2026-05-22 23:30)
+- [CAPTURE_IDEE] Idée d'intégrer Patelexity au workflow de recherche existant (NotebookLM + AIM), pour compléter le triangle méthodologique de recherche approfondie (2026-05-22 23:31)
+- [CAPTURE_IDEE] Explorer comment combiner les créations faites avec Hermes et OpenClaw pour maximiser leur synergie et leur impact. (2026-05-22 23:33)
+
+**Fils ouverts :**
+- OpenClaw / Hermes : l'utilisateur voulait une recherche → besoin clarifié = NotebookLM suffit pour l'instant
+- Les 4 idées capturées ne sont pas développées — pas d'action concrète définie
+
+**Observation :**
+- L'utilisateur a exploré OpenClaw/Hermes mais n'a pas tranché de besoin réel : ni recherche web, ni intégration de skills externes
+- NotebookLM reste l'outil de recherche privilégié (sources uploadées = connaissances accumulées)
+- Les captures staging ne seront probablement pas toutes consolidées — attendre que l'utilisateur revienne dessus
