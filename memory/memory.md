@@ -97,6 +97,7 @@
 |------|------|---------|--------|
 | 2026-05-20 | Intégration Google Calendar et Proton pour synchroniser les calendriers | Compagnon IA | Capturé |
 | 2026-05-20 | Explorer autres concepts Bourdieu : champ, violence symbolique, distinction | Concepts | Capturé |
+| 2026-05-22 | Possibilité d'effacer/modifier certaines parties des fichiers capturés (idées périmées) | Compagnon IA | Capturé |
 
 ## 🟢 Décisions prises
 
