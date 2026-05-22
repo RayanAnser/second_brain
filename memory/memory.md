@@ -382,3 +382,22 @@
 
 | 2026-05-22 | Monitoring consommation API/tokens pour éviter surprises facturation (actuellement pas de visibilité) | Compagnon IA | Capturé |
 | 2026-05-22 | Améliorer classification intentions : trop de messages conversationnels classés CAPTURE — renforcer détection CONVERSATION | Compagnon IA | Capturé |
+
+### Session — 2026-05-22 23:23
+**Sujet principal :** Résumé des projets en cours
+
+**Contexte :**
+- Utilisateur demande un état des lieux global des projets
+- Réponse fournie avec statut actuel de 4 projets : Compagnon IA (actif, Sprint 5 terminé), Strudel (en veille), Agent admin (idée non formalisée), OpenClaw (exploration locale)
+- Agent de traduction retiré de la liste (archivé 2026-05-22)
+
+**Capture stagée :**
+- [CAPTURE_PROJET] Continuer Sprint 6 + intégration desktop pour améliorer l'expérience utilisateur
+
+**Observation :**
+- Seul le compagnon IA avance concrètement — les autres projets sont bloqués ou en veille faute de périmètre défini
+- Utilisateur a clairement identifié Sprint 6 (consolidation nocturne) comme prochaine étape prioritaire
+
+**Fils ouverts :**
+- Débloquer les projets en veille (Strudel, Agent admin) ou continuer sur Sprint 6 ?
+- Amélioration expérience desktop (prochaine itération à définir)
