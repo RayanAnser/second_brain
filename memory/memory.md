@@ -424,3 +424,19 @@
 - L'utilisateur a exploré OpenClaw/Hermes mais n'a pas tranché de besoin réel : ni recherche web, ni intégration de skills externes
 - NotebookLM reste l'outil de recherche privilégié (sources uploadées = connaissances accumulées)
 - Les captures staging ne seront probablement pas toutes consolidées — attendre que l'utilisateur revienne dessus
+
+
+### Session — 2026-05-22 23:38
+**Sujet principal :** Problème détection d'intention Notion
+
+**Contexte :**
+- Utilisateur signale un problème récurrent : dès qu'il pose une question qui ressemble à "cherche X", le système déclenche NOTION_READ alors qu'il veut une réflexion ou une vraie recherche (NotebookLM, web, ou juste discuter)
+- Détection trop large : interprète toute demande de recherche comme une demande Notion
+
+**Idée capturée :**
+- Possibilité de répondre directement aux messages vocaux dans le chat (actuellement non codable dans ce contexte)
+
+**Fils ouverts :**
+- Durcir la détection NOTION_READ : ne déclencher QUE si mention explicite de Notion ("Montre-moi ma roadmap Notion", "Lis ma page Notion X", "Qu'est-ce qu'il y a dans Notion sur Y")
+- Tout le reste → CONVERSATION par défaut
+- Solution immédiate : coder maintenant ou attendre exemples concrets de messages qui ont foiré ?
