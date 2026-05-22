@@ -440,3 +440,34 @@
 - Durcir la détection NOTION_READ : ne déclencher QUE si mention explicite de Notion ("Montre-moi ma roadmap Notion", "Lis ma page Notion X", "Qu'est-ce qu'il y a dans Notion sur Y")
 - Tout le reste → CONVERSATION par défaut
 - Solution immédiate : coder maintenant ou attendre exemples concrets de messages qui ont foiré ?
+
+### Session — 2026-05-22 23:45
+**Sujet principal :** État des lieux global + test d'usage du compagnon IA
+
+**Contexte :**
+- Demande de récap complet des projets en cours
+- Constat : un seul projet actif (Compagnon IA, Sprint 5 terminé), tout le reste en veille ou non formalisé
+- Problème sous-jacent identifié : le compagnon fonctionne techniquement, mais utilisé peu (2-3/10)
+- Question clé : **pourquoi l'utilisateur n'utilise pas le compagnon au quotidien ?**
+- Réponse utilisateur : **c'est l'usage — se demande comment l'utiliser au mieux**
+
+**5 cas d'usage concrets proposés :**
+1. Capture vocale d'idées en mouvement (remplacer Google Keep/notes perdues)
+2. Déblocage quand ça tourne en rond (forcer à nommer le blocage précis)
+3. Relances sur ce qui est abandonné (finir ou choisir consciemment de lâcher)
+4. Relier les idées entre elles (construire une vision profonde)
+5. Structurer le chaos en fin de session (valider ce qui mérite d'être retenu)
+
+**Test proposé :** Envoyer un message vocal par jour pendant 7 jours, sans obligation de `/save`, juste tester la capture.
+
+**Capture staging :**
+- [CAPTURE_IDEE] Exploration du système de mémoire : test des fonctionnalités de stockage et utilisation comme outil de réflexion et d'aide à la pensée (2026-05-22 23:43)
+
+**Fils ouverts :**
+- Test 7 jours : l'utilisateur va-t-il le faire ou préférer creuser autre chose avant ?
+- Si le test est fait, évaluer à la fin de la semaine si ça apporte quelque chose ou si c'est une contrainte de plus
+
+**Observation clé :**
+- L'utilisateur est en phase d'exploration, pas encore d'habitude installée
+- Le vrai blocage n'est pas technique — c'est le flou sur **quoi faire avec le compagnon au quotidien**
+- Les 5 cas d'usage sont des hypothèses à tester, pas des certitudes
