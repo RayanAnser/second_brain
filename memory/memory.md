@@ -471,3 +471,35 @@
 - L'utilisateur est en phase d'exploration, pas encore d'habitude installée
 - Le vrai blocage n'est pas technique — c'est le flou sur **quoi faire avec le compagnon au quotidien**
 - Les 5 cas d'usage sont des hypothèses à tester, pas des certitudes
+
+
+### Session — 2026-05-23 00:08
+**Sujet principal :** Premier usage intensif du compagnon — clarification de l'usage réel
+
+**Contexte :**
+- Utilisateur demande où on en est → constat : système opérationnel, mais utilisé très peu (2-3/10)
+- Raison identifiée : **flou sur l'usage concret au quotidien** — pas de blocage technique, mais manque de clarté sur quoi faire avec le compagnon
+- **Premier usage réel aujourd'hui :** nombreux messages vocaux envoyés pour capturer idées et tester le système
+- Besoin confirmé : **un lieu unique de centralisation** pour tout regrouper
+
+**Cas d'usage testés/évoqués :**
+- Capture d'idées vocales en mouvement
+- Déblocage quand ça tourne en rond
+- Relances sur idées/projets abandonnés
+- Connexion entre idées
+- Structuration du chaos en fin de session
+
+**Test proposé (pas encore fait) :**
+- Envoyer 1 message vocal par jour pendant 7 jours, sans obligation de `/save`, juste pour évaluer l'utilité
+
+**Décision :**
+- Pas de décision ferme — l'utilisateur explore encore l'usage possible
+- Le compagnon fonctionne techniquement, maintenant il faut comprendre **comment l'utiliser au mieux**
+
+**Fils ouverts :**
+- Test 7 jours : à faire ou pas ?
+- Continuer sur Sprint 6 (consolidation nocturne) ou clarifier d'abord un cas d'usage ultra-concret ?
+
+**Observation :**
+- Première vraie session d'usage intensif depuis le déploiement
+- L'utilisateur a testé le système massivement aujourd'hui (2026-05-23) → validation que le besoin de centralisation existe
