@@ -23,7 +23,9 @@ Avignon, Vaucluse
 - Victor
 
 ## Relations sentimentales
-- Crush sur Maya (2026-05-23)
+- Crush sur Maya (capturé le 2026-05-23 — pas de contexte, ni durée, ni réciprocité documentée)
+
+**Note :** Aucune information complémentaire disponible pour l'instant.
 
 ## Agenda
 - **Mardi 9 juin 2026, 17h** : Rendez-vous avec Ségolène
