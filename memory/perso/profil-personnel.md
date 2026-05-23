@@ -21,6 +21,14 @@ Avignon, Vaucluse
 - Charles
 - Louis
 - Victor
+- Maxime (à Metz)
+
+**Contexte social récent (2026-05-23) :**
+Deux cercles dans le "groupe" :
+- **Noyau choisi** : Charles, Victor, Louis, Maxime (à Metz) — amis proches, motivations sociales principales
+- **Les autres** : Simon, Guette — pas des connards, mais pas cool, hyper exclusifs. Impression d'être à part, parce que pas originalement dans le groupe d'origine.
+
+**Observation :** Motivation principale pour voir ce groupe mixte = présence de Charles, Victor, Louis. Ils ont des activités/parcours similaires. Louis fait la même chose que Rayän concernant Charles et Victor (observation confirmée 2026-05-23).
 
 ## Relations sentimentales
 
