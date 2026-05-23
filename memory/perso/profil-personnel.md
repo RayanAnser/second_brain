@@ -23,7 +23,8 @@ Avignon, Vaucluse
 - Victor
 
 ## Relations sentimentales
-- Crush sur Maya (capturé le 2026-05-23 — pas de contexte, ni durée, ni réciprocité documentée)
+
+- Crush sur Maya (capturé le 2026-05-23 — première présentation aux amis ce jour, tension lors de l'événement)
 
 **Note :** Aucune information complémentaire disponible pour l'instant.
 
