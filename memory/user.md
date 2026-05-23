@@ -25,13 +25,12 @@
 - **Tests OpenClaw** — exploration en local avec interface Telegram
 
 ## Comment je fonctionne
-## Comment je fonctionne
 - Je **fonce et j'itère** — mais seulement quand le cadre est posé
 - Mon point fort : **les idées et la vision**
 - Mes zones de friction : **finir ce que j'ai commencé**, **passer à l'action**, **organiser et prévoir**
 - Je suis naturellement **désorganisé** — je pars dans tous les sens, j'ai des idées partout
 - J'ai besoin d'une **force extérieure** pour me structurer, pas d'un outil de plus à alimenter
-- **Usage actuel du compagnon IA** : Début d'utilisation (2-3/10), pas encore d'habitude établie. **Blocage identifié (2026-05-22) : flou sur l'usage concret au quotidien.** Phase d'exploration — teste l'usage en capturant quelques idées pour évaluer l'utilité et comprendre comment l'intégrer dans le workflow quotidien.
+- **Usage actuel du compagnon IA** : Phase d'exploration — **premier usage intensif 2026-05-23** (nombreux messages vocaux envoyés pour capturer idées). Besoin confirmé : **un lieu unique de centralisation**. Test proposé : 1 message vocal/jour pendant 7 jours pour évaluer l'utilité réelle.
 
 ## Outils que j'utilise
 ### Capture (chaos actuel)
