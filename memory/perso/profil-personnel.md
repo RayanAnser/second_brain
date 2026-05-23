@@ -17,6 +17,14 @@ Avignon, Vaucluse
 - Cousine : Noémie
 - Tante : Louisette
 
+## Amis
+- Charles
+- Louis
+- Victor
+
+## Relations sentimentales
+- Crush sur Maya (2026-05-23)
+
 ## Agenda
 - **Mardi 9 juin 2026, 17h** : Rendez-vous avec Ségolène
 
