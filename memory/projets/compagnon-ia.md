@@ -50,7 +50,8 @@ Second cerveau personnel + mémoire persistante + interface voice-first en fran�
 
 ## Log
 | Date | Événement |
-|------|-----------|
+|------|-----------||
+| 2026-05-23 | **Jarvis V0.1** — Deux problèmes identifiés : 1) Latence trop élevée 2) TTS lit les balises Markdown à voix haute (nettoyage MD requis avant TTS) |
 | 2026-05-22 | **v0.1.0 desktop** — Première version desktop opérationnelle |
 | 2026-05-22 | Sprint 5 terminé — intégrations Notion/NotebookLM/GitHub Sync opérationnelles |
 | 2026-05-22 | Clarification intégration recherche : NotebookLM suffit, Perplexity non nécessaire |
