@@ -7,8 +7,32 @@
 ---
 
 ## 🔴 Projets actifs
-## 🔴 Projets actifs
 > Ce sur quoi je travaille en ce moment. Mis à jour quand le statut change.
+
+### Compagnon IA personnel (ce système)
+- **Statut** : Sprint 5 terminé — GitHub Sync fonctionnel
+- **Contexte** : Second cerveau + mémoire persistante + voice-first français
+- **Dernière évolution** : L'écriture sur GitHub est maintenant fonctionnelle. Plus besoin de configurer GITHUB_TOKEN ni GITHUB_REPO dans les variables d'environnement.
+- **Prochaine étape** : Sprint 6 (consolidation nocturne) — mécanisme de consolidation automatique de la mémoire
+- **Stack retenue** : Obsidian (mémoire locale) + Claude Code (cerveau) + Groq Whisper (voix) + Telegram (mobile) + Desktop v0.1.0 + Python (skills) + Notion + NotebookLM + GitHub Sync
+
+### Agent de coding musical — Strudel
+- **Statut** : Expérimentation — en veille
+- **Contexte** : Live coding musical avec Strudel
+- **Dernière évolution** : —
+- **Prochaine étape** : Définir un premier cas d'usage concret
+
+### Agent d'automatisation administrative
+- **Statut** : Idée — non formalisée
+- **Contexte** : Automatiser des tâches administratives chronophages
+- **Dernière évolution** : Capturé en session du 2026-05-18
+- **Prochaine étape** : Identifier les 2-3 tâches administratives concrètes qui bouffent le plus de temps
+
+### OpenClaw — exploration
+- **Statut** : Test local
+- **Contexte** : Testé avec interface Telegram
+- **Dernière évolution** : —
+- **Prochaine étape** : Évaluer l'intégration dans l'architecture compagnon
 
 ### Compagnon IA personnel (ce système)
 - **Statut** : Sprint 5 terminé — intégrations opérationnelles (Notion, NotebookLM, GitHub Sync)
