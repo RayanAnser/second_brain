@@ -4,6 +4,7 @@ Heartbeat Sprint 3 — digest matinal automatique
 Cron : 0 8 * * * cd /home/rayan/code/RayanAnser/second_brain && python heartbeat.py >> memory/logs/heartbeat.log 2>&1
 """
 
+import html
 import json
 import logging
 import os
@@ -79,7 +80,7 @@ def analyze_memory(memory_content: str, today: str) -> dict:
     system = EXTRACT_SYSTEM.replace("{seuil}", str(STALE_THREAD_DAYS))
     response = claude.messages.create(
         model="claude-sonnet-4-5",
-        max_tokens=1000,
+        max_tokens=4096,
         system=system,
         messages=[{
             "role": "user",
@@ -114,25 +115,25 @@ def date_fr(dt: datetime) -> str:
 
 def format_message(analysis: dict, freshness_days: int, freshness_label: str) -> str:
     now = datetime.now()
-    lines = [f"🌅 *Digest du {date_fr(now)}*"]
+    lines = [f"🌅 <b>Digest du {date_fr(now)}</b>"]
 
     # Fraîcheur de memory.md
     if freshness_days >= STALE_MEMORY_WARN:
         lines.append(
-            f"\n⚠️ _memory.md non mis à jour depuis {freshness_days} jours_"
-            f" (dernière modif : {freshness_label})"
+            f"\n⚠️ <i>memory.md non mis à jour depuis {freshness_days} jours</i>"
+            f" (dernière modif : {html.escape(freshness_label)})"
         )
     else:
-        lines.append(f"\n_memory.md — dernière modif : {freshness_label}_")
+        lines.append(f"\n<i>memory.md — dernière modif : {html.escape(freshness_label)}</i>")
 
     # Fils ouverts anciens
     fils = analysis.get("fils_ouverts_anciens", [])
     if fils:
-        lines.append(f"\n🔴 *Fils ouverts depuis +{STALE_THREAD_DAYS}j :*")
+        lines.append(f"\n🔴 <b>Fils ouverts depuis +{STALE_THREAD_DAYS}j :</b>")
         for fil in fils:
-            desc  = fil.get("description", "")
-            jours = fil.get("jours", "?")
-            lines.append(f"• {desc} _({jours}j)_")
+            desc  = html.escape(fil.get("description", ""))
+            jours = html.escape(str(fil.get("jours", "?")))
+            lines.append(f"• {desc} <i>({jours}j)</i>")
     else:
         lines.append(f"\n✅ Aucun fil ouvert depuis plus de {STALE_THREAD_DAYS} jours.")
 
@@ -140,13 +141,13 @@ def format_message(analysis: dict, freshness_days: int, freshness_label: str) ->
     proj = analysis.get("projet_prioritaire", {})
     nom  = proj.get("nom", "")
     if nom:
-        lines.append(f"\n⭐ *Projet prioritaire : {nom}*")
+        lines.append(f"\n⭐ <b>Projet prioritaire : {html.escape(nom)}</b>")
         statut = proj.get("statut", "")
         if statut:
-            lines.append(f"Statut : {statut}")
+            lines.append(f"Statut : {html.escape(statut)}")
         next_step = proj.get("prochaine_etape", "")
         if next_step:
-            lines.append(f"→ {next_step}")
+            lines.append(f"→ {html.escape(next_step)}")
 
     return "\n".join(lines)
 
@@ -157,7 +158,7 @@ def send_telegram(text: str):
     url  = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     resp = requests.post(
         url,
-        json={"chat_id": CHAT_ID, "text": text, "parse_mode": "Markdown"},
+        json={"chat_id": CHAT_ID, "text": text, "parse_mode": "HTML"},
         timeout=10,
     )
     resp.raise_for_status()

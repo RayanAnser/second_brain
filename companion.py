@@ -755,7 +755,7 @@ def dispatch_agenda_query(slug: str) -> str:
     for d in dates:
         entries = _agenda_get_entries(text, d)
         if entries:
-            blocks.append(f"*{d}*\n" + "\n".join(f"• {e}" for e in entries))
+            blocks.append(f"📅 {d}\n" + "\n".join(f"• {e}" for e in entries))
 
     if not blocks:
         if slug in ("aujourd'hui", "today"):
@@ -1119,7 +1119,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if intent == "AGENDA_QUERY":
         reply = dispatch_agenda_query(slug)
-        await update.message.reply_text(reply, parse_mode="Markdown")
+        await update.message.reply_text(reply)
         return
 
     try:
