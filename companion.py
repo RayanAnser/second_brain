@@ -14,7 +14,7 @@ import re
 import tempfile
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import requests
@@ -84,6 +84,7 @@ CONCEPTS_DIR    = MEMORY_DIR / "concepts"
 PERSO_DIR       = MEMORY_DIR / "perso"
 STAGING_FILE    = MEMORY_DIR / "staging.json"
 COMMANDS_MD     = MEMORY_DIR / "COMMANDS.md"
+AGENDA_MD       = MEMORY_DIR / "agenda.md"
 
 # ── Clients ──────────────────────────────────────────────────────────────────
 claude = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
@@ -557,25 +558,32 @@ Intentions disponibles :
 - NOTION_APPEND     : ajouter du contenu à une page Notion existante (slug = page cible)
 - NOTION_CREATE     : créer une nouvelle page Notion (slug = titre de la nouvelle page)
 - RESEARCH_REQUEST  : demande de recherche approfondie sur un sujet via NotebookLM (ex: "fais une recherche sur X", "explore le sujet Y", "crée un notebook sur Z")
+- AGENDA_ADD        : ajouter un rendez-vous, événement ou rappel dans l'agenda
+- AGENDA_QUERY      : consulter l'agenda (aujourd'hui, cette semaine, une date précise)
 - CONVERSATION      : tout le reste (question, discussion, conseil)
 
 Format strict :
 {"intent": "...", "slug": "...", "content": "..."}
 
 Règles :
-- slug : kebab-case pour CAPTURE_* et RESEARCH_REQUEST ; nom exact de la page pour NOTION_READ/APPEND ; titre lisible pour NOTION_CREATE ; vide "" pour TACHE/CONVERSATION
-- content : version épurée et concise de l'info à retenir ; pour RESEARCH_REQUEST : requête de recherche précise en français ; vide "" pour CONVERSATION et NOTION_READ
+- slug : kebab-case pour CAPTURE_* et RESEARCH_REQUEST ; nom exact de la page pour NOTION_READ/APPEND ; titre lisible pour NOTION_CREATE ; vide "" pour TACHE/CONVERSATION ; date YYYY-MM-DD calculée depuis la date fournie pour AGENDA_ADD ; "aujourd'hui"/"semaine" ou YYYY-MM-DD pour AGENDA_QUERY
+- content : version épurée et concise de l'info à retenir ; pour RESEARCH_REQUEST : requête de recherche précise en français ; vide "" pour CONVERSATION et NOTION_READ ; "HH:MM | description concise" pour AGENDA_ADD (heure au format 24h, ex: "14:00 | Dentiste — Dr. Martin") ; vide "" pour AGENDA_QUERY
 - En cas de doute : CONVERSATION"""
 
 
 
+_DAY_FR = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
+
+
 async def classify_intent(text: str) -> dict:
+    now = datetime.now()
+    date_ctx = f"[Aujourd'hui : {now.strftime('%Y-%m-%d')}, {_DAY_FR[now.weekday()]}]"
     try:
         response = claude.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=300,
             system=_cached_system(_INTENT_SYSTEM),
-            messages=[{"role": "user", "content": text}],
+            messages=[{"role": "user", "content": f"{date_ctx}\n{text}"}],
         )
         _log_api_call(response, "classify_intent")
         raw = response.content[0].text.strip()
@@ -664,6 +672,86 @@ def _append_to_section(file_path: Path, section: str, line: str):
 def _dispatch_tache(content: str):
     _append_to_section(MEMORY_MD, "Fils ouverts", content)
     _push_to_github(MEMORY_MD, MEMORY_MD.read_text())
+
+
+# ── Agenda ───────────────────────────────────────────────────────────────────
+
+def _agenda_get_entries(text: str, date: str) -> list[str]:
+    header = f"## {date}"
+    if header not in text:
+        return []
+    idx = text.index(header) + len(header)
+    next_sec = text.find("\n## ", idx)
+    section = text[idx:next_sec] if next_sec != -1 else text[idx:]
+    return [
+        line.strip()[2:]
+        for line in section.splitlines()
+        if line.strip().startswith("- ")
+    ]
+
+
+def dispatch_agenda_add(date: str, content: str) -> str:
+    AGENDA_MD.parent.mkdir(parents=True, exist_ok=True)
+    text = AGENDA_MD.read_text() if AGENDA_MD.exists() else ""
+    header = f"## {date}"
+    new_line = f"- {content}"
+
+    if header in text:
+        idx = text.index(header) + len(header)
+        next_sec = text.find("\n## ", idx)
+        if next_sec == -1:
+            updated = text.rstrip("\n") + f"\n{new_line}\n"
+        else:
+            block = text[idx:next_sec].rstrip("\n")
+            updated = text[:idx] + block + f"\n{new_line}" + text[next_sec:]
+    else:
+        pattern = re.compile(r'^## (\d{4}-\d{2}-\d{2})', re.MULTILINE)
+        insert_pos = None
+        for m in pattern.finditer(text):
+            if m.group(1) > date:
+                insert_pos = m.start()
+                break
+        new_section = f"## {date}\n{new_line}\n"
+        if insert_pos is None:
+            sep = "\n\n" if text.rstrip() else ""
+            updated = text.rstrip("\n") + sep + new_section
+        else:
+            before = text[:insert_pos].rstrip("\n")
+            updated = before + ("\n\n" if before else "") + new_section + "\n" + text[insert_pos:]
+
+    AGENDA_MD.write_text(updated)
+    _push_to_github(AGENDA_MD, updated)
+    return f"📅 RDV ajouté : {content}"
+
+
+def dispatch_agenda_query(slug: str) -> str:
+    if not AGENDA_MD.exists():
+        return "Aucun agenda pour l'instant."
+    text = AGENDA_MD.read_text()
+    today = datetime.now().date()
+
+    if slug in ("aujourd'hui", "today"):
+        dates = [today.strftime("%Y-%m-%d")]
+    elif slug == "semaine":
+        dates = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+    else:
+        dates = [slug]
+
+    blocks = []
+    for d in dates:
+        entries = _agenda_get_entries(text, d)
+        if entries:
+            blocks.append(f"*{d}*\n" + "\n".join(f"• {e}" for e in entries))
+
+    if not blocks:
+        if slug in ("aujourd'hui", "today"):
+            return "Aucun RDV aujourd'hui."
+        elif slug == "semaine":
+            return "Aucun RDV cette semaine."
+        else:
+            return f"Aucun RDV le {slug}."
+
+    return "\n\n".join(blocks)
 
 
 # ── Notion ───────────────────────────────────────────────────────────────────
@@ -1008,6 +1096,18 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"Erreur Notion : {e}")
         return
 
+    if intent == "AGENDA_ADD":
+        confirm = dispatch_agenda_add(slug, content)
+        session_logs.setdefault(user_id, []).append(f"USER : {text}")
+        session_logs[user_id].append(f"[AGENDA_ADD] {slug} {content}")
+        await update.message.reply_text(confirm)
+        return
+
+    if intent == "AGENDA_QUERY":
+        reply = dispatch_agenda_query(slug)
+        await update.message.reply_text(reply, parse_mode="Markdown")
+        return
+
     try:
         reply = await ask_claude(text, user_id, extra_files)
         await update.message.reply_text(md_to_html(reply), parse_mode="HTML")
@@ -1046,6 +1146,16 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             session_logs.setdefault(user_id, []).append(f"USER (vocal) : {transcript}")
             session_logs[user_id].append(f"[TACHE] {content}")
             await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n📋 Tâche ajoutée aux fils ouverts.", parse_mode="HTML")
+        elif intent == "AGENDA_ADD":
+            slug = result.get("slug", "")
+            confirm = dispatch_agenda_add(slug, content)
+            session_logs.setdefault(user_id, []).append(f"USER (vocal) : {transcript}")
+            session_logs[user_id].append(f"[AGENDA_ADD] {slug} {content}")
+            await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n{confirm}", parse_mode="HTML")
+        elif intent == "AGENDA_QUERY":
+            slug = result.get("slug", "aujourd'hui")
+            reply = dispatch_agenda_query(slug)
+            await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n{reply}", parse_mode="HTML")
         else:
             reply = await ask_claude(transcript, user_id, extra_files)
             await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n{md_to_html(reply)}", parse_mode="HTML")
@@ -1459,10 +1569,20 @@ def _hb_analyze_memory(memory_content: str, today: str) -> dict:
     return json.loads(raw)
 
 
-def _hb_format_message(analysis: dict, freshness_days: int, freshness_label: str) -> str:
+def _hb_format_message(
+    analysis: dict,
+    freshness_days: int,
+    freshness_label: str,
+    today_agenda: list[str],
+) -> str:
     now = datetime.now()
     date_str = f"{now.day} {_MONTHS_FR[now.month]} {now.year}"
     lines = [f"🌅 *Digest du {date_str}*"]
+
+    if today_agenda:
+        lines.append("\n📅 *Agenda du jour :*")
+        for entry in today_agenda:
+            lines.append(f"• {entry}")
 
     if freshness_days >= STALE_MEMORY_WARN:
         lines.append(
@@ -1511,7 +1631,9 @@ def _run_heartbeat():
         freshness_days, freshness_label = _hb_check_freshness()
         memory_content = MEMORY_MD.read_text()
         analysis = _hb_analyze_memory(memory_content, today)
-        message = _hb_format_message(analysis, freshness_days, freshness_label)
+        agenda_text = AGENDA_MD.read_text() if AGENDA_MD.exists() else ""
+        today_agenda = _agenda_get_entries(agenda_text, today)
+        message = _hb_format_message(analysis, freshness_days, freshness_label, today_agenda)
         _hb_send_telegram(message)
         log.info("Heartbeat : digest envoyé.")
     except Exception as e:
