@@ -1,7 +1,14 @@
 use futures_util::StreamExt;
+use std::sync::OnceLock;
 
 const CHARLOTTE_VOICE_ID: &str = "XB0fDUnXU5powFXDhCwa";
 const ELEVENLABS_MODEL: &str = "eleven_turbo_v2_5";
+
+static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+fn http_client() -> &'static reqwest::Client {
+    HTTP_CLIENT.get_or_init(reqwest::Client::new)
+}
 
 #[tauri::command]
 pub async fn synthesize_speech(text: String) -> Result<Vec<u8>, String> {
@@ -25,8 +32,7 @@ pub async fn synthesize_speech(text: String) -> Result<Vec<u8>, String> {
         }
     });
 
-    let client = reqwest::Client::new();
-    let response = client
+    let response = http_client()
         .post(&url)
         .header("xi-api-key", &api_key)
         .header("content-type", "application/json")

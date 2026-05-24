@@ -135,14 +135,34 @@ def _push_to_github(file_path: Path, content: str):
 
 # ── Helpers fichiers ─────────────────────────────────────────────────────────
 
+_context_cache: tuple[float, str] | None = None
+_CONTEXT_TTL = 60.0
+
+
+def _invalidate_context_cache() -> None:
+    global _context_cache
+    _context_cache = None
+
+
+def _cached_system(text: str) -> list[dict]:
+    """Wrap a system prompt string for Anthropic prompt caching."""
+    return [{"type": "text", "text": text, "cache_control": {"type": "ephemeral"}}]
+
+
 def load_context() -> str:
+    global _context_cache
+    now = time.monotonic()
+    if _context_cache is not None and now - _context_cache[0] < _CONTEXT_TTL:
+        return _context_cache[1]
     parts = []
-    for path, label in [(SOUL_MD, "SOUL"), (USER_MD, "USER"), (MEMORY_MD, "MEMORY"), (COMMANDS_MD, "COMMANDS")]:
+    for path, label in [(SOUL_MD, "SOUL"), (USER_MD, "USER"), (MEMORY_MD, "MEMORY")]:
         if path.exists():
             parts.append(f"<{label}>\n{path.read_text()}\n</{label}>")
         else:
             log.warning(f"Fichier manquant : {path}")
-    return "\n\n".join(parts)
+    result = "\n\n".join(parts)
+    _context_cache = (now, result)
+    return result
 
 
 def build_system_prompt(extra_files: list[Path] = []) -> str:
@@ -176,6 +196,7 @@ def write_user_update(patch: str):
     current = USER_MD.read_text() if USER_MD.exists() else ""
     updated = current.rstrip("\n") + "\n\n" + patch + "\n"
     USER_MD.write_text(updated)
+    _invalidate_context_cache()
     log.info("user.md mis à jour.")
     _push_to_github(USER_MD, updated)
 
@@ -232,10 +253,12 @@ async def extract_user_update(request: str) -> str:
     response = claude.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=400,
-        system="""Tu mets à jour un profil utilisateur en markdown.
-Reçois : le contenu actuel de user.md et une demande de mise à jour.
-Retourne UNIQUEMENT le bloc markdown à ajouter à la fin de user.md.
-Pas de préambule, pas d'explication. Sois concis : une section courte ou quelques bullet points.""",
+        system=_cached_system(
+            "Tu mets à jour un profil utilisateur en markdown.\n"
+            "Reçois : le contenu actuel de user.md et une demande de mise à jour.\n"
+            "Retourne UNIQUEMENT le bloc markdown à ajouter à la fin de user.md.\n"
+            "Pas de préambule, pas d'explication. Sois concis : une section courte ou quelques bullet points."
+        ),
         messages=[{
             "role": "user",
             "content": f"user.md actuel :\n\n{current}\n\nDemande : {request}",
@@ -447,7 +470,7 @@ async def save_intelligently(user_id: int) -> dict:
     response = claude.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=4096,
-        system=_SAVE_SYSTEM,
+        system=_cached_system(_SAVE_SYSTEM),
         messages=[{"role": "user", "content": user_content}],
     )
     _log_api_call(response, "save_intelligently")
@@ -461,6 +484,7 @@ async def save_intelligently(user_id: int) -> dict:
 
 
 def execute_ops(ops: list) -> list[str]:
+    _invalidate_context_cache()
     modified = []
     base = MEMORY_DIR.resolve().parent
     for op in ops:
@@ -548,9 +572,9 @@ Règles :
 async def classify_intent(text: str) -> dict:
     try:
         response = claude.messages.create(
-            model="claude-sonnet-4-5",
+            model="claude-haiku-4-5-20251001",
             max_tokens=300,
-            system=_INTENT_SYSTEM,
+            system=_cached_system(_INTENT_SYSTEM),
             messages=[{"role": "user", "content": text}],
         )
         _log_api_call(response, "classify_intent")
@@ -588,9 +612,9 @@ async def select_memory_files(text: str) -> list[Path]:
     file_list = "\n".join(f"- {label}" for label, _ in available)
     try:
         response = claude.messages.create(
-            model="claude-sonnet-4-5",
+            model="claude-haiku-4-5-20251001",
             max_tokens=200,
-            system=(
+            system=_cached_system(
                 "Tu sélectionnes les fichiers mémoire pertinents pour répondre à une question.\n"
                 "Retourne UNIQUEMENT du JSON valide : {\"files\": [\"memory/...\", ...]}\n"
                 "Retourne une liste vide si aucun fichier n'est pertinent.\n"
@@ -852,7 +876,10 @@ async def handle_notion_read(slug: str, user_message: str, user_id: int) -> str:
     response = claude.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=1024,
-        system=build_system_prompt() + f"\n\n[Contenu Notion — {slug}]\n{notion_content}",
+        system=[
+            {"type": "text", "text": build_system_prompt(), "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": f"\n\n[Contenu Notion — {slug}]\n{notion_content}"},
+        ],
         messages=list(conversations.get(user_id, [])) + [{"role": "user", "content": user_message}],
     )
     _log_api_call(response, "handle_notion_read")
@@ -906,7 +933,7 @@ async def ask_claude(user_message: str, user_id: int, extra_files: list[Path] = 
     response = claude.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=1024,
-        system=build_system_prompt(extra_files),
+        system=_cached_system(build_system_prompt(extra_files)),
         messages=history
     )
     _log_api_call(response, "ask_claude")
@@ -928,7 +955,10 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.chat.send_action("typing")
 
-    result = await classify_intent(text)
+    result, extra_files = await asyncio.gather(
+        classify_intent(text),
+        select_memory_files(text),
+    )
     intent = result.get("intent", "CONVERSATION")
     content = result.get("content", text)
     slug    = result.get("slug", "")
@@ -979,7 +1009,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     try:
-        extra_files = await select_memory_files(text)
         reply = await ask_claude(text, user_id, extra_files)
         await update.message.reply_text(md_to_html(reply), parse_mode="HTML")
     except Exception as e:
@@ -1000,7 +1029,10 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         transcript = await transcribe_voice(tmp_path)
         log.info(f"Transcription : {transcript}")
 
-        result  = await classify_intent(transcript)
+        result, extra_files = await asyncio.gather(
+            classify_intent(transcript),
+            select_memory_files(transcript),
+        )
         intent  = result.get("intent", "CONVERSATION")
         content = result.get("content", transcript)
 
@@ -1015,7 +1047,6 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             session_logs[user_id].append(f"[TACHE] {content}")
             await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n📋 Tâche ajoutée aux fils ouverts.", parse_mode="HTML")
         else:
-            extra_files = await select_memory_files(transcript)
             reply = await ask_claude(transcript, user_id, extra_files)
             await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n{md_to_html(reply)}", parse_mode="HTML")
     except Exception as e:
@@ -1412,7 +1443,7 @@ def _hb_analyze_memory(memory_content: str, today: str) -> dict:
     response = claude.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=1000,
-        system=system,
+        system=_cached_system(system),
         messages=[{
             "role": "user",
             "content": f"Date d'aujourd'hui : {today}\n\nmemory.md :\n\n{memory_content}",

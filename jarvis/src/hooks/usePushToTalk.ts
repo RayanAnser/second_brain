@@ -125,6 +125,21 @@ export function usePushToTalk() {
     setIsListening(true);
   }, [memoryContext, messages]);
 
+  // Warm-up: prime the MediaRecorder codec on mount so the first recording is instant
+  useEffect(() => {
+    let cancelled = false;
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then((stream) => {
+        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
+        const mr = new MediaRecorder(stream);
+        mr.onstop = () => stream.getTracks().forEach((t) => t.stop());
+        mr.start();
+        mr.stop();
+      })
+      .catch(() => { /* permission denied or unavailable — ignore */ });
+    return () => { cancelled = true; };
+  }, []);
+
   // Spacebar binding
   useEffect(() => {
     const down = (e: KeyboardEvent) => {

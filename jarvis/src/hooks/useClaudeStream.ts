@@ -5,7 +5,7 @@ import { useTTS } from "./useTTS";
 
 export function useClaudeStream() {
   const { appendToLastAssistant, setIsThinking } = useStore();
-  const { speak } = useTTS();
+  const { finishSpeaking } = useTTS();
 
   useEffect(() => {
     let accumulated = "";
@@ -17,10 +17,8 @@ export function useClaudeStream() {
 
     const p2 = listen<void>("claude-done", () => {
       setIsThinking(false);
-      if (accumulated.trim()) {
-        speak(accumulated);
-        accumulated = "";
-      }
+      accumulated = "";
+      finishSpeaking();
     });
 
     return () => {
