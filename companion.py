@@ -190,6 +190,41 @@ def save_raw_log(user_id: int):
     log.info(f"Log brut sauvegardé : {log_path}")
 
 
+# ── Cost tracking ─────────────────────────────────────────────────────────────
+
+COSTS_FILE = LOGS_DIR / "costs.jsonl"
+
+_MODEL_PRICES: dict[str, tuple[float, float]] = {
+    "claude-sonnet-4-5":         (3.00,  15.00),
+    "claude-haiku-4-5-20251001": (0.25,   1.25),
+    "claude-haiku-4-5":          (0.25,   1.25),
+}
+
+
+def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+    price_in, price_out = _MODEL_PRICES.get(model, (3.00, 15.00))
+    return (input_tokens * price_in + output_tokens * price_out) / 1_000_000
+
+
+def _log_api_call(response, function: str) -> None:
+    try:
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        usage = response.usage
+        model = response.model
+        entry = {
+            "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "model": model,
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+            "cost_usd": round(_compute_cost(model, usage.input_tokens, usage.output_tokens), 6),
+            "function": function,
+        }
+        with COSTS_FILE.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception as e:
+        log.warning(f"_log_api_call échoué : {e}")
+
+
 # ── User profile update ──────────────────────────────────────────────────────
 
 async def extract_user_update(request: str) -> str:
@@ -206,6 +241,7 @@ Pas de préambule, pas d'explication. Sois concis : une section courte ou quelqu
             "content": f"user.md actuel :\n\n{current}\n\nDemande : {request}",
         }],
     )
+    _log_api_call(response, "extract_user_update")
     return response.content[0].text.strip()
 
 
@@ -414,6 +450,7 @@ async def save_intelligently(user_id: int) -> dict:
         system=_SAVE_SYSTEM,
         messages=[{"role": "user", "content": user_content}],
     )
+    _log_api_call(response, "save_intelligently")
     raw = response.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
@@ -516,6 +553,7 @@ async def classify_intent(text: str) -> dict:
             system=_INTENT_SYSTEM,
             messages=[{"role": "user", "content": text}],
         )
+        _log_api_call(response, "classify_intent")
         raw = response.content[0].text.strip()
         log.info(f"classify_intent raw={raw!r}")
         if raw.startswith("```"):
@@ -563,6 +601,7 @@ async def select_memory_files(text: str) -> list[Path]:
                 "content": f"Question : {text}\n\nFichiers disponibles :\n{file_list}",
             }],
         )
+        _log_api_call(response, "select_memory_files")
         raw = response.content[0].text.strip()
         if raw.startswith("```"):
             raw = raw.split("```")[1]
@@ -816,6 +855,7 @@ async def handle_notion_read(slug: str, user_message: str, user_id: int) -> str:
         system=build_system_prompt() + f"\n\n[Contenu Notion — {slug}]\n{notion_content}",
         messages=list(conversations.get(user_id, [])) + [{"role": "user", "content": user_message}],
     )
+    _log_api_call(response, "handle_notion_read")
     reply = response.content[0].text
     session_logs.setdefault(user_id, []).append(f"USER : {user_message} [lu Notion: {slug}]")
     session_logs[user_id].append(f"ASSISTANT : {reply}")
@@ -869,7 +909,7 @@ async def ask_claude(user_message: str, user_id: int, extra_files: list[Path] = 
         system=build_system_prompt(extra_files),
         messages=history
     )
-
+    _log_api_call(response, "ask_claude")
     reply = response.content[0].text
     history.append({"role": "assistant", "content": reply})
     session_logs[user_id].append(f"ASSISTANT : {reply}")
@@ -1102,6 +1142,63 @@ async def handle_command_status(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text("\n".join(lines))
 
 
+async def handle_command_costs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/costs — coûts API Anthropic par période et top fonctions."""
+    if not COSTS_FILE.exists():
+        await update.message.reply_text("Aucun coût enregistré pour l'instant.")
+        return
+
+    try:
+        raw_lines = [l for l in COSTS_FILE.read_text().splitlines() if l.strip()]
+        entries = []
+        for line in raw_lines:
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                pass
+    except Exception as e:
+        await update.message.reply_text(f"Erreur lecture costs.jsonl : {e}")
+        return
+
+    if not entries:
+        await update.message.reply_text("Aucun coût enregistré pour l'instant.")
+        return
+
+    today = datetime.now().date()
+
+    def parse_date(ts: str):
+        return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S").date()
+
+    today_entries = [e for e in entries if parse_date(e["timestamp"]) == today]
+    week_entries  = [e for e in entries if (today - parse_date(e["timestamp"])).days < 7]
+    month_entries = [e for e in entries if (today - parse_date(e["timestamp"])).days < 30]
+
+    def fmt(lst):
+        return len(lst), sum(e["cost_usd"] for e in lst)
+
+    today_calls, today_cost = fmt(today_entries)
+    week_calls,  week_cost  = fmt(week_entries)
+    month_calls, month_cost = fmt(month_entries)
+
+    fn_costs: dict[str, float] = {}
+    for e in month_entries:
+        fn_costs[e["function"]] = fn_costs.get(e["function"], 0.0) + e["cost_usd"]
+    top3 = sorted(fn_costs.items(), key=lambda x: -x[1])[:3]
+
+    out = [
+        "💰 *Coûts API Anthropic*\n",
+        f"*Aujourd'hui* : {today_calls} appel(s) — ${today_cost:.4f}",
+        f"*7 derniers jours* : {week_calls} appel(s) — ${week_cost:.4f}",
+        f"*30 derniers jours* : {month_calls} appel(s) — ${month_cost:.4f}",
+    ]
+    if top3:
+        out.append("\n*Top 3 fonctions (30j)* :")
+        for i, (fn, cost) in enumerate(top3, 1):
+            out.append(f"{i}. `{fn}` — ${cost:.4f}")
+
+    await update.message.reply_text("\n".join(out), parse_mode="Markdown")
+
+
 _DOC_SUBDIRS   = [("projets", PROJETS_DIR), ("concepts", CONCEPTS_DIR), ("perso", PERSO_DIR)]
 _DOC_PAGE_SIZE = 10
 _DOC_MAX       = 30  # cap for keyword search (no pagination)
@@ -1321,6 +1418,7 @@ def _hb_analyze_memory(memory_content: str, today: str) -> dict:
             "content": f"Date d'aujourd'hui : {today}\n\nmemory.md :\n\n{memory_content}",
         }],
     )
+    _log_api_call(response, "_hb_analyze_memory")
     raw = response.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```", 2)[1]
@@ -1428,6 +1526,7 @@ def main():
     app.add_handler(CommandHandler("reset",  handle_command_reset))
     app.add_handler(CommandHandler("save",   handle_command_save))
     app.add_handler(CommandHandler("status", handle_command_status))
+    app.add_handler(CommandHandler("costs",  handle_command_costs))
     app.add_handler(CommandHandler("update", handle_command_update))
     app.add_handler(CommandHandler("docs",   handle_command_docs))
     app.add_handler(CallbackQueryHandler(handle_user_callback,   pattern="^usr_"))

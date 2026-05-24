@@ -1,7 +1,7 @@
 use futures_util::StreamExt;
 
 const CHARLOTTE_VOICE_ID: &str = "XB0fDUnXU5powFXDhCwa";
-const ELEVENLABS_MODEL: &str = "eleven_multilingual_v2";
+const ELEVENLABS_MODEL: &str = "eleven_turbo_v2_5";
 
 #[tauri::command]
 pub async fn synthesize_speech(text: String) -> Result<Vec<u8>, String> {
