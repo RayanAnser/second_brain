@@ -38,8 +38,10 @@ Deux cercles dans le "groupe" :
 
 ## Agenda
 - **Mardi 9 juin 2026, 17h** : Rendez-vous avec Ségolène
+- **Vendredi 30 mai 2026** : Voir Sacha, Alice et Paul
+- **Samedi 31 mai 2026** : Anniversaire d'Estelle
 
-**Note :** Le rendez-vous de ce jour était initialement prévu mais non daté précisément.
+**Note :** Le rendez-vous avec Ségolène était initialement prévu mais non daté précisément.
 
 ## Amis
 - Charles
