@@ -59,3 +59,9 @@ Il ne fait pas tout — il fait ce dont Rayän a besoin : **ne plus repartir de 
 
 ## Date de création
 2026-05-22
+
+## Réflexion en cours — Concept de compagnon IA
+**Capture staging 2026-05-24 12:21 :**  
+Réflexion en cours sur le concept de compagnon IA — pas de contenu développé dans le message vocal, capture brute pour exploration ultérieure.
+
+**Statut :** Idée en exploration — à creuser en session dédiée.
