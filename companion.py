@@ -223,9 +223,15 @@ _MODEL_PRICES: dict[str, tuple[float, float]] = {
 }
 
 
-def _compute_cost(model: str, input_tokens: int, output_tokens: int) -> float:
+def _compute_cost(model: str, input_tokens: int, output_tokens: int,
+                  cache_read: int = 0, cache_creation: int = 0) -> float:
     price_in, price_out = _MODEL_PRICES.get(model, (3.00, 15.00))
-    return (input_tokens * price_in + output_tokens * price_out) / 1_000_000
+    return (
+        input_tokens * price_in
+        + output_tokens * price_out
+        + cache_read * price_in * 0.1
+        + cache_creation * price_in * 1.25
+    ) / 1_000_000
 
 
 def _log_api_call(response, function: str) -> None:
@@ -233,12 +239,20 @@ def _log_api_call(response, function: str) -> None:
         LOGS_DIR.mkdir(parents=True, exist_ok=True)
         usage = response.usage
         model = response.model
+        cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
+        cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
         entry = {
             "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
             "model": model,
             "input_tokens": usage.input_tokens,
             "output_tokens": usage.output_tokens,
-            "cost_usd": round(_compute_cost(model, usage.input_tokens, usage.output_tokens), 6),
+            "cache_read_tokens": cache_read,
+            "cache_creation_tokens": cache_creation,
+            "cost_usd": round(
+                _compute_cost(model, usage.input_tokens, usage.output_tokens,
+                               cache_read, cache_creation),
+                6,
+            ),
             "function": function,
         }
         with COSTS_FILE.open("a", encoding="utf-8") as f:
@@ -1326,11 +1340,40 @@ async def handle_command_costs(update: Update, context: ContextTypes.DEFAULT_TYP
         fn_costs[e["function"]] = fn_costs.get(e["function"], 0.0) + e["cost_usd"]
     top3 = sorted(fn_costs.items(), key=lambda x: -x[1])[:3]
 
+    def _cache_stats(lst):
+        read_tokens = sum(e.get("cache_read_tokens", 0) for e in lst)
+        creation_tokens = sum(e.get("cache_creation_tokens", 0) for e in lst)
+        return read_tokens, creation_tokens
+
+    today_cache_read, today_cache_write   = _cache_stats(today_entries)
+    month_cache_read, month_cache_write   = _cache_stats(month_entries)
+
+    def _savings(lst, read_tokens):
+        """Économie vs coût sans cache : cache_read_tokens auraient coûté plein tarif."""
+        total_savings = 0.0
+        for e in lst:
+            r = e.get("cache_read_tokens", 0)
+            if not r:
+                continue
+            price_in, _ = _MODEL_PRICES.get(e["model"], (3.00, 15.00))
+            total_savings += r * price_in * 0.9 / 1_000_000  # 90% économisé vs plein tarif
+        return total_savings
+
+    today_saved  = _savings(today_entries, today_cache_read)
+    month_saved  = _savings(month_entries, month_cache_read)
+
+    def fmt_cache(read_tok, saved):
+        if not read_tok:
+            return "aucun hit"
+        return f"{read_tok:,} tok lus → économie ${saved:.4f}"
+
     out = [
         "💰 *Coûts API Anthropic*\n",
         f"*Aujourd'hui* : {today_calls} appel(s) — ${today_cost:.4f}",
+        f"  Cache : {fmt_cache(today_cache_read, today_saved)}",
         f"*7 derniers jours* : {week_calls} appel(s) — ${week_cost:.4f}",
         f"*30 derniers jours* : {month_calls} appel(s) — ${month_cost:.4f}",
+        f"  Cache : {fmt_cache(month_cache_read, month_saved)}",
     ]
     if top3:
         out.append("\n*Top 3 fonctions (30j)* :")
