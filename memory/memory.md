@@ -545,3 +545,54 @@
 **Observation :**
 - Évolution technique notable — passage d'une configuration manuelle à un système automatisé
 - Prochaine étape : Sprint 6 (consolidation nocturne)
+
+
+### Session — 2026-05-24 23:38
+**Sujet principal :** Tests système staging et retours utilisateur
+
+**Contexte :**
+- Utilisateur teste le système de staging des captures (CAPTURE_IDEE)
+- Premier test : idée générique pour valider le fonctionnement
+- Deuxième test : idée spécifique JSON pour valider format
+- Demande de résumé en fin de session
+
+**Captures stagées :**
+- [CAPTURE_IDEE] Idée à explorer pour un test (2026-05-24 23:38)
+- [CAPTURE_IDEE] Idée à explorer pour un test de staging JSON (2026-05-25 00:04)
+
+**Observation :**
+- Aucun contenu réel capturé — session purement technique de validation système
+- Fonctionnement staging confirmé opérationnel
+
+**Fils ouverts :**
+- Aucun — session test système uniquement
+
+### Session — 2026-05-25 00:09
+**Sujet principal :** Optimisations techniques Jarvis — Sprint 6 consolidation nocturne
+
+**Captures stagées :**
+- Prompt caching Anthropic déployé : -58% coûts, -1373 tokens system prompt
+- Haiku pour classify/select : -88% coûts vs Sonnet
+- Async parallel : -300ms latence
+- Nouveaux intents opérationnels : AGENDA_ADD, AGENDA_QUERY
+- Heartbeat 8h avec RDV du jour
+- TTS ElevenLabs turbo (~500ms)
+- Cost tracking en place (/costs)
+- V0.1 validé : mémoire connectée (Rayan, 30 ans, AI Product Builder Paris), vocal+texte Telegram
+- Sprint 7 RAG SQLite prévu
+
+**Statut projet Compagnon IA :**
+- Sprint 6 (consolidation nocturne) en cours
+- Stack validée : Telegram, Groq Whisper, Claude Sonnet/Haiku, MD local, Desktop v0.1.0, Python, Notion, NotebookLM, GitHub Sync
+- Optimisations coûts/latence déployées
+- Vocal fluide (transcription + TTS)
+- Agenda synchronisé (intents opérationnels)
+
+**Observation :**
+- Session purement technique — optimisations infra + validation V0.1
+- Système de plus en plus fluide (coûts, latence, vocal)
+- Prochaine étape : RAG SQLite (Sprint 7)
+
+**Fils ouverts :**
+- Sprint 7 (RAG SQLite) à lancer
+- Monitoring coûts : suivi long terme à faire

@@ -1,7 +1,7 @@
 # Compagnon IA personnel
 
 ## Statut
-**Sprint 3-5 en cours — v0.1.0 desktop déployée**
+**Sprint 6 en cours — consolidation nocturne + optimisations déployées**
 
 ## Contexte
 Second cerveau personnel + mémoire persistante + interface voice-first en français. Inspiré par la vidéo Cole Medin "AI Second Brain with Claude Code" et le concept de "Triade létale" OpenClaw (construire sa propre solution pour garder le contrôle).
@@ -21,11 +21,18 @@ Second cerveau personnel + mémoire persistante + interface voice-first en fran�
 - Extraction automatique de mémoire en fin de session (`/save`)
 - Validation inline keyboard avant écriture dans `memory.md`
 - Logs de session dans `memory/logs/`
-- Commandes : `/save`, `/reset`, `/status`
-- **v0.1.0 desktop** : version desktop opérationnelle
+- Commandes : `/save`, `/reset`, `/status`, `/costs`
+- **v0.1.0 validée** : mémoire connectée (Rayan, 30 ans, AI Product Builder Paris), vocal+texte Telegram
 - **Intégration Notion** : Token configuré ✓, recherche Notion intégrée
 - **Intégration NotebookLM** : connexion recherche opérationnelle
 - **GitHub Sync** : opérationnel (pull code fonctionnel)
+- **Agenda** : intents AGENDA_ADD/QUERY opérationnels, heartbeat 8h avec RDV du jour
+- **TTS** : ElevenLabs turbo (~500ms)
+- **Optimisations Sprint 6** :
+  - Prompt caching Anthropic : -58% coûts, -1373 tokens system prompt
+  - Haiku pour classify/select : -88% coûts
+  - Async parallel : -300ms latence
+  - Cost tracking : /costs command
 
 ## Architecture mémoire
 | Fichier | Rôle |

@@ -122,3 +122,16 @@
 - Si une idée semble abandonnée depuis plusieurs jours, relance-moi dessus
 - Propose ce que tu retiens d'important à la fin de chaque session — je valide ou corrige
 - Ne me donne pas de listes de tâches sans contexte. Aide-moi à prioriser, pas à accumuler.
+
+## Usage actuel du compagnon IA
+## Usage actuel du compagnon IA
+- **Phase d'exploration** — premier usage intensif aujourd'hui (2026-05-23) : nombreux messages vocaux envoyés pour capturer idées
+- **Besoin confirmé** : un lieu unique de centralisation pour regrouper toutes les captures éparses (Google Keep, notes vocales, conversations IA perdues)
+- **Cas d'usage testés :**
+  - Capture d'idées vocales en mouvement
+  - Déblocage quand ça tourne en rond
+  - Relances sur idées/projets abandonnés
+  - Connexion entre idées
+  - Structuration du chaos en fin de session
+- **Test proposé** : 1 message vocal/jour pendant 7 jours pour évaluer l'utilité réelle (pas encore démarré)
+- **Note usage** : Actuellement utilisé à 2-3/10, non pas pour des raisons techniques, mais par flou sur l'usage concret au quotidien
