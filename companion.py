@@ -82,9 +82,10 @@ LOGS_DIR        = MEMORY_DIR / "logs"
 PROJETS_DIR     = MEMORY_DIR / "projets"
 CONCEPTS_DIR    = MEMORY_DIR / "concepts"
 PERSO_DIR       = MEMORY_DIR / "perso"
-STAGING_FILE    = MEMORY_DIR / "staging.json"
-COMMANDS_MD     = MEMORY_DIR / "COMMANDS.md"
-AGENDA_MD       = MEMORY_DIR / "agenda.md"
+STAGING_FILE       = MEMORY_DIR / "staging.json"
+COMMANDS_MD        = MEMORY_DIR / "COMMANDS.md"
+AGENDA_MD          = MEMORY_DIR / "agenda.md"
+CONSOLIDATION_FILE = MEMORY_DIR / "last_consolidation.json"
 
 # ── Clients ──────────────────────────────────────────────────────────────────
 claude = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
@@ -1683,8 +1684,133 @@ def _run_heartbeat():
         log.error(f"Heartbeat : erreur — {e}")
 
 
+# ── Consolidation nocturne ────────────────────────────────────────────────────
+
+_CONSOLIDATION_SUMMARY_SYSTEM = """\
+Tu résumes un log de conversation en 5 bullet points maximum.
+Ne retiens que les faits mémorables : décisions, idées, infos personnelles, projets, tâches concrètes.
+Ignore le small talk et les échanges sans valeur mémorielle.
+Retourne UNIQUEMENT les bullet points (format "- ..."), sans préambule ni conclusion."""
+
+
+def _load_consolidation_state() -> dict:
+    if not CONSOLIDATION_FILE.exists():
+        return {"date": "", "processed_logs": []}
+    try:
+        return json.loads(CONSOLIDATION_FILE.read_text())
+    except Exception:
+        return {"date": "", "processed_logs": []}
+
+
+def _save_consolidation_state(date: str, processed_logs: list[str]) -> None:
+    CONSOLIDATION_FILE.write_text(json.dumps(
+        {"date": date, "processed_logs": list(processed_logs)},
+        ensure_ascii=False, indent=2,
+    ))
+
+
+def _summarize_log_haiku(log_content: str) -> str:
+    response = claude.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=300,
+        system=_cached_system(_CONSOLIDATION_SUMMARY_SYSTEM),
+        messages=[{"role": "user", "content": log_content}],
+    )
+    _log_api_call(response, "_summarize_log_haiku")
+    return response.content[0].text.strip()
+
+
+def _consolidate_with_sonnet(summaries_text: str, staged_text: str) -> dict:
+    user_content = f"Date : {datetime.now().strftime('%Y-%m-%d %H:%M')}\n\n"
+    user_content += f"Résumés des sessions de la journée :\n{summaries_text}\n\n"
+    if staged_text:
+        user_content += staged_text + "\n\n"
+    user_content += f"État actuel des fichiers mémoire :\n\n{build_memory_context()}"
+
+    response = claude.messages.create(
+        model="claude-sonnet-4-5",
+        max_tokens=4096,
+        system=_cached_system(_SAVE_SYSTEM),
+        messages=[{"role": "user", "content": user_content}],
+    )
+    _log_api_call(response, "_consolidate_with_sonnet")
+    raw = response.content[0].text.strip()
+    if raw.startswith("```"):
+        raw = raw.split("```")[1]
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+    return json.loads(raw)
+
+
+def _run_consolidation() -> None:
+    today = datetime.now().strftime("%Y-%m-%d")
+    state = _load_consolidation_state()
+    already_processed = set(state.get("processed_logs", []))
+
+    if not LOGS_DIR.exists():
+        log.info("Consolidation : répertoire logs absent, rien à faire.")
+        _save_consolidation_state(today, list(already_processed))
+        return
+
+    all_logs = sorted(LOGS_DIR.glob("session_*.md"))
+    new_logs = [f for f in all_logs if f.name not in already_processed]
+
+    if not new_logs:
+        log.info("Consolidation : aucun nouveau log.")
+        _save_consolidation_state(today, list(already_processed))
+        return
+
+    log.info(f"Consolidation : {len(new_logs)} nouveau(x) log(s).")
+
+    # Passe 1 — Haiku : résumé de chaque log non traité
+    summaries = []
+    for log_path in new_logs:
+        try:
+            content = log_path.read_text()
+            if not content.strip():
+                continue
+            summary = _summarize_log_haiku(content)
+            summaries.append(f"[{log_path.name}]\n{summary}")
+            log.info(f"Consolidation : {log_path.name} résumé ({len(summary)} chars).")
+        except Exception as e:
+            log.error(f"Consolidation : erreur résumé {log_path.name} — {e}")
+
+    new_processed = already_processed | {f.name for f in new_logs}
+
+    if not summaries:
+        log.info("Consolidation : tous les logs étaient vides.")
+        _save_consolidation_state(today, list(new_processed))
+        return
+
+    # Captures stagées globales (tous utilisateurs)
+    all_staged = [c for caps in staged_captures.values() for c in caps]
+    staged_text = ""
+    if all_staged:
+        lines = [f"- [{e['hint']}] {e['content']} ({e['timestamp']})" for e in all_staged]
+        staged_text = "Captures stagées :\n" + "\n".join(lines)
+
+    # Passe 2 — Sonnet : consolidation intelligente
+    try:
+        result = _consolidate_with_sonnet("\n\n".join(summaries), staged_text)
+        ops     = result.get("ops", [])
+        summary = result.get("summary", "")
+        if ops:
+            modified = execute_ops(ops)
+            log.info(f"Consolidation : {len(modified)} fichier(s) mis à jour — {summary}")
+        else:
+            log.info(f"Consolidation : rien à retenir — {summary}")
+    except Exception as e:
+        log.error(f"Consolidation passe 2 échouée : {e}")
+        # État quand même sauvegardé pour ne pas reprocesser les logs en erreur
+    finally:
+        _save_consolidation_state(today, list(new_processed))
+        log.info("Consolidation : état sauvegardé.")
+
+
 def _heartbeat_loop():
     last_fired_date: str | None = None
+    last_consolidated_date: str | None = None
     while True:
         time.sleep(60)
         now = datetime.now()
@@ -1693,6 +1819,10 @@ def _heartbeat_loop():
             last_fired_date = today
             log.info("Heartbeat : déclenchement digest matinal.")
             threading.Thread(target=_run_heartbeat, daemon=True).start()
+        if now.hour == 2 and last_consolidated_date != today:
+            last_consolidated_date = today
+            log.info("Consolidation : déclenchement nocturne.")
+            threading.Thread(target=_run_consolidation, daemon=True).start()
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
