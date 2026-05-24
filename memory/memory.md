@@ -529,3 +529,19 @@
 **Observation :**
 - Première vraie session d'usage intensif depuis le déploiement
 - L'utilisateur a testé le système massivement aujourd'hui (2026-05-23) → validation que le besoin de centralisation existe
+
+
+### Session — 2026-05-24 11:35
+**Sujet principal :** Mise à jour GitHub Sync
+
+**Capture stagée :**
+- [CAPTURE_PROJET] L'écriture sur GitHub est maintenant fonctionnelle. Plus besoin de configurer GITHUB_TOKEN ni GITHUB_REPO dans les variables d'environnement.
+
+**Statut projet Compagnon IA :**
+- Sprint 5 terminé — GitHub Sync opérationnel
+- Configuration simplifiée (pas de variables d'environnement nécessaires)
+- Stack complète : Obsidian + Claude Code + Groq Whisper + Telegram + Desktop v0.1.0 + Python + Notion + NotebookLM + **GitHub Sync ✓**
+
+**Observation :**
+- Évolution technique notable — passage d'une configuration manuelle à un système automatisé
+- Prochaine étape : Sprint 6 (consolidation nocturne)
