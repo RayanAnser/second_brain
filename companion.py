@@ -213,7 +213,7 @@ Règles absolues :
 - SUPPRESSION DE CAPTURE : si l'utilisateur demande de supprimer une capture stagée, réponds uniquement "Je cherche à supprimer ça." ou équivalent neutre court. Ne confirme jamais le résultat (succès ou échec) — le système s'en occupe en arrière-plan.
 """
     delete_rule = next((l for l in prompt.splitlines() if "SUPPRESSION DE CAPTURE" in l), "(règle non trouvée)")
-    print(f"[build_system_prompt] règle DELETE_STAGING → {delete_rule!r}", flush=True)
+    print(f"[build_system_prompt] règle DELETE_STAGING (texte brut envoyé à Claude) :\n{delete_rule}", flush=True)
     return prompt
 
 
@@ -1273,6 +1273,10 @@ async def ask_claude(
         if parts:
             api_content = "\n\n".join(parts) + "\n\n" + api_content
     if context_injection:
+        log.debug(f"context_injection preview: {context_injection[:200]}")
+        stripped = context_injection.lstrip()
+        if stripped.startswith(("{", "[", "---\n")) or "```json" in context_injection:
+            log.warning(f"context_injection contient du JSON/YAML brut — risque de polluer la réponse Claude")
         api_content = context_injection + "\n\n" + api_content
 
     # L'historique stocke uniquement le message brut — garde la conversation lisible
