@@ -320,6 +320,7 @@
 - Mardi 9 juin à 17h : rendez-vous avec Ségolène
 - Vérifier s'il y a un cinéma qui projette Fenêtres sur cour dans Paris
 - Repas demain à midi avec les potes de prépa
+- Ajouter un test 'Marseille 2' pour les captures en attente dans l'environnement staging
 ### Session — 2026-05-20 21:32
 **Sujet principal** : Check rapide identité
 
