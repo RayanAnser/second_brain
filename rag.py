@@ -199,24 +199,37 @@ class RAGIndex:
             except Exception as e:
                 log.error(f"RAG index_modified : {e}")
 
+    _SEARCH_LIMIT = 500  # max chunks chargés en RAM par recherche
+
     def search(self, query: str, top_k: int = _TOP_K) -> list[SearchResult]:
         """Embed la query et retourne les top_k chunks les plus similaires."""
         try:
             q_emb = _embed([query])[0]   # shape (dim,), normalisé
             with self._connect() as conn:
+                total = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
                 rows = conn.execute(
-                    "SELECT source_path, content, embedding FROM chunks"
+                    "SELECT source_path, content, embedding FROM chunks LIMIT ?",
+                    (self._SEARCH_LIMIT,),
                 ).fetchall()
             if not rows:
                 return []
+            if total > self._SEARCH_LIMIT:
+                log.warning(f"RAG search : index tronqué à {self._SEARCH_LIMIT}/{total} chunks")
             matrix = np.stack([np.frombuffer(r[2], dtype=np.float32) for r in rows])
             scores  = (matrix @ q_emb).flatten()
             top_idx = np.argsort(scores)[::-1][:top_k]
-            return [
+            results = [
                 SearchResult(rows[i][1], rows[i][0], float(scores[i]))
                 for i in top_idx
                 if scores[i] >= _MIN_SCORE
             ]
+            if results:
+                score_summary = ", ".join(f"{r.score:.2f}" for r in results)
+                log.info(f"RAG search : {len(results)} résultat(s) — scores [{score_summary}]")
+            else:
+                best = float(scores[np.argmax(scores)]) if len(scores) else 0.0
+                log.info(f"RAG search : aucun résultat (seuil={_MIN_SCORE}, meilleur score={best:.2f})")
+            return results
         except Exception as e:
             log.error(f"RAG search : {e}")
             return []

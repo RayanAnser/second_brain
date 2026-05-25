@@ -21,7 +21,7 @@ export default function App() {
       if (toastTimer.current) clearTimeout(toastTimer.current);
       setToast(e.payload);
       toastTimer.current = setTimeout(() => setToast(null), 2000);
-      invoke<Capture[]>("read_staging").then(setCaptures).catch(console.error);
+      invoke<Capture[]>("fetch_staging").then(setCaptures).catch(console.error);
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);

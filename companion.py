@@ -85,6 +85,8 @@ GROQ_KEY        = os.environ["GROQ_API_KEY"]
 CHAT_ID         = os.environ["TELEGRAM_CHAT_ID"]
 if not CHAT_ID or int(CHAT_ID) == 0:
     raise ValueError("TELEGRAM_CHAT_ID doit être non-nul — vérifier le .env")
+# Signal pour heartbeat.py cron : si le companion tourne, le cron s'auto-désactive.
+os.environ["COMPANION_RUNNING"] = "1"
 MEMORY_DIR      = Path(os.environ.get("MEMORY_DIR", "./memory"))
 GITHUB_TOKEN    = os.environ.get("GITHUB_TOKEN")
 GITHUB_REPO     = os.environ.get("GITHUB_REPO")   # "owner/repo"
@@ -506,7 +508,7 @@ async def save_intelligently(user_id: int) -> dict:
 
     response = claude.messages.create(
         model="claude-sonnet-4-5",
-        max_tokens=4096,
+        max_tokens=6000,
         system=_cached_system(_SAVE_SYSTEM),
         messages=[{"role": "user", "content": user_content}],
     )
@@ -619,7 +621,7 @@ async def classify_intent(text: str) -> dict:
     try:
         response = claude.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=300,
+            max_tokens=500,
             system=_cached_system(_INTENT_SYSTEM),
             messages=[{"role": "user", "content": f"{date_ctx}\n{text}"}],
         )
@@ -1501,7 +1503,7 @@ async def handle_command_help(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def handle_command_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/status — résumé de la session en cours."""
-    user_id  = update.effective_user.id
+    user_id  = int(CHAT_ID)
     exchanges = len(conversations.get(user_id, [])) // 2
     staged    = len(staged_captures.get(user_id, []))
     lines = [f"{exchanges} échange(s) dans la session."]

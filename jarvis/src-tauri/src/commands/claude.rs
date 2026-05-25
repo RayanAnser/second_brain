@@ -49,7 +49,13 @@ fn find_sentence_end(s: &str) -> Option<usize> {
 fn fallback_stage(content: &str, hint: &str) {
     let memory_dir = std::env::var("MEMORY_DIR").unwrap_or_else(|_| "./memory".to_string());
     let staging_path = std::path::PathBuf::from(&memory_dir).join("staging.json");
-    let chat_id = std::env::var("TELEGRAM_CHAT_ID").unwrap_or_else(|_| "0".to_string());
+    let chat_id = match std::env::var("TELEGRAM_CHAT_ID") {
+        Ok(v) if !v.is_empty() && v != "0" => v,
+        _ => {
+            eprintln!("[jarvis] fallback_stage: TELEGRAM_CHAT_ID non défini ou 0 — abandon (ajouter dans .env)");
+            return;
+        }
+    };
     let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
 
     let text = std::fs::read_to_string(&staging_path).unwrap_or_else(|_| "{}".to_string());
@@ -200,7 +206,7 @@ pub async fn ask_claude(
     }]);
 
     let body = serde_json::json!({
-        "model":      "claude-sonnet-4-5",
+        "model":      "claude-sonnet-4-5-20250929",
         "max_tokens": 256,
         "stream":     true,
         "system":     system_blocks,

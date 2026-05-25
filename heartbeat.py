@@ -168,6 +168,10 @@ def send_telegram(text: str):
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
+    if os.getenv("COMPANION_RUNNING"):
+        log.info("COMPANION_RUNNING détecté — companion gère le heartbeat, heartbeat.py ignoré.")
+        sys.exit(0)
+
     if not MEMORY_MD.exists():
         log.error(f"memory.md introuvable : {MEMORY_MD}")
         sys.exit(1)
