@@ -1,24 +1,29 @@
 {
   "7649220324": [
     {
-      "content": "Idée sur le tennis et Roland Garros",
+      "content": "Club Maté",
       "hint": "CAPTURE_IDEE",
-      "timestamp": "2026-05-25 18:57"
+      "timestamp": "2026-05-25 19:22"
     },
     {
-      "content": "Recette blanquette de veau",
+      "content": "Recette : poireaux vinaigrettes",
       "hint": "CAPTURE_IDEE",
-      "timestamp": "2026-05-25 19:06"
+      "timestamp": "2026-05-25 19:23"
     },
     {
-      "content": "blanquette de veau",
+      "content": "Ne pas utiliser : blanquettes de veau",
       "hint": "CAPTURE_IDEE",
-      "timestamp": "2026-05-25 19:13"
+      "timestamp": "2026-05-25 19:23"
     },
     {
-      "content": "sauce hollandaise",
+      "content": "Ne pas utiliser : steaks frites",
       "hint": "CAPTURE_IDEE",
-      "timestamp": "2026-05-25 19:14"
+      "timestamp": "2026-05-25 19:23"
+    },
+    {
+      "content": "steaks frites",
+      "hint": "CAPTURE_IDEE",
+      "timestamp": "2026-05-25 19:24"
     }
   ]
 }

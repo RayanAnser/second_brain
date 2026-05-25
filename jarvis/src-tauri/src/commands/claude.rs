@@ -20,11 +20,22 @@ const VOCAL_INSTRUCTION: &str = "\n\nTu es en mode vocal. Réponds en 1-3 phrase
 const CLASSIFY_SYSTEM: &str = "\
 Classifie le message utilisateur. Retourne UNIQUEMENT du JSON valide, sans texte autour.\n\
 Intentions : CAPTURE_IDEE, CAPTURE_PROJET, CAPTURE_CONCEPT, CAPTURE_PERSO, TACHE, DELETE_STAGING, CONVERSATION.\n\
-- DELETE_STAGING : supprimer une capture en attente (ex: \"supprime la capture X\", \"enlève X\", \"retire ça\").\n\
+\n\
+Règles pour content :\n\
+- content = nom brut de l'idée, SANS préfixe. JAMAIS \"Ne pas utiliser :\", \"Recette :\", \"Idée :\", \"Note :\" ou tout autre label.\n\
+- Correct : \"Roland Garros\"  Incorrect : \"Idée : Roland Garros\"\n\
+- Correct : \"boire plus d'eau\"  Incorrect : \"Note : boire plus d'eau\"\n\
+\n\
 Format par défaut (un seul sujet) : {\"intent\": \"...\", \"content\": \"version épurée, concise\"}\n\
-- Pour DELETE_STAGING, content = fragment de texte à chercher dans les captures.\n\
-Si le message contient plusieurs intentions distinctes (CAPTURE_*, TACHE ou DELETE_STAGING), retourne un array :\n\
-[{\"intent\": \"...\", \"content\": \"...\"}, {\"intent\": \"...\", \"content\": \"...\"}]\n\
+\n\
+DELETE_STAGING : supprimer une capture en attente (ex: \"supprime X\", \"enlève X\", \"retire ça\").\n\
+- content = nom exact de la capture à chercher, un seul nom par objet.\n\
+- Si l'utilisateur veut effacer PLUSIEURS captures, retourner UN objet DELETE_STAGING PAR capture.\n\
+- JAMAIS combiner plusieurs noms dans un seul content.\n\
+- Exemple pour \"efface Roland Garros et Club Maté\" :\n\
+  [{\"intent\": \"DELETE_STAGING\", \"content\": \"Roland Garros\"}, {\"intent\": \"DELETE_STAGING\", \"content\": \"Club Maté\"}]\n\
+\n\
+Si le message contient plusieurs intentions distinctes (CAPTURE_*, TACHE ou DELETE_STAGING), retourne un array.\n\
 N'utilise l'array que si les intentions sont vraiment distinctes. CONVERSATION : toujours un objet simple.\n\
 En cas de doute : CONVERSATION.";
 
