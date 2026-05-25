@@ -1985,7 +1985,7 @@ async def on_startup(app):
         _http_app.router.add_post("/task",  _http_task)
         runner = aiohttp_web.AppRunner(_http_app)
         await runner.setup()
-        site = aiohttp_web.TCPSite(runner, "127.0.0.1", 8765)
+        site = aiohttp_web.TCPSite(runner, "0.0.0.0", 8765)
         await site.start()
         log.info("HTTP companion server démarré sur localhost:8765")
     else:

@@ -62,7 +62,9 @@ fn fallback_stage(content: &str, hint: &str) {
 }
 
 async fn classify_and_stage(text: String, api_key: String, app: AppHandle) {
+    eprintln!("[jarvis] classify_and_stage: démarré — text={:?}", text.chars().take(60).collect::<String>());
     if text.is_empty() {
+        eprintln!("[jarvis] classify_and_stage: text vide, abandon");
         return;
     }
 
@@ -99,18 +101,27 @@ async fn classify_and_stage(text: String, api_key: String, app: AppHandle) {
         None    => { eprintln!("[jarvis] classify_and_stage: unexpected response shape"); return; }
     };
 
-    let classified: serde_json::Value = match serde_json::from_str(&raw) {
+    let cleaned = raw
+        .trim()
+        .trim_start_matches("```json")
+        .trim_start_matches("```")
+        .trim_end_matches("```")
+        .trim();
+    let classified: serde_json::Value = match serde_json::from_str(cleaned) {
         Ok(j)  => j,
-        Err(_) => return,
+        Err(e) => { eprintln!("[jarvis] classify_and_stage: JSON parse failed — raw={raw:?} err={e}"); return; }
     };
 
     let intent  = classified.get("intent").and_then(|v| v.as_str()).unwrap_or("CONVERSATION");
     let content = classified.get("content").and_then(|v| v.as_str()).unwrap_or(text.as_str());
 
+    eprintln!("[jarvis] classify_and_stage: intent={intent:?} content={:?}", content.chars().take(60).collect::<String>());
+
     let is_capture = matches!(intent, "CAPTURE_IDEE" | "CAPTURE_PROJET" | "CAPTURE_CONCEPT" | "CAPTURE_PERSO");
     let is_tache   = intent == "TACHE";
 
     if !is_capture && !is_tache {
+        eprintln!("[jarvis] classify_and_stage: intent CONVERSATION, rien à stager");
         return;
     }
 
@@ -124,17 +135,27 @@ async fn classify_and_stage(text: String, api_key: String, app: AppHandle) {
         ("/stage", serde_json::json!({"content": content, "hint": intent}))
     };
 
-    let http_ok = http_client()
-        .post(format!("http://localhost:8765{endpoint}"))
+    let companion_url = std::env::var("COMPANION_URL")
+        .unwrap_or_else(|_| "http://localhost:8765".to_string());
+    eprintln!("[jarvis] classify_and_stage: POST {companion_url}{endpoint}");
+    let http_result = http_client()
+        .post(format!("{companion_url}{endpoint}"))
         .json(&payload)
         .send()
-        .await
-        .map(|r| r.status().is_success())
-        .unwrap_or(false);
+        .await;
 
-    if !http_ok {
-        eprintln!("[jarvis] classify_and_stage: companion down — fallback staging.json [{intent}]");
-        fallback_stage(content, intent);
+    match http_result {
+        Ok(r) if r.status().is_success() => {
+            eprintln!("[jarvis] classify_and_stage: companion OK ({} {})", r.status(), endpoint);
+        }
+        Ok(r) => {
+            eprintln!("[jarvis] classify_and_stage: companion erreur HTTP {} — fallback", r.status());
+            fallback_stage(content, intent);
+        }
+        Err(e) => {
+            eprintln!("[jarvis] classify_and_stage: companion down ({e}) — fallback staging.json [{intent}]");
+            fallback_stage(content, intent);
+        }
     }
 }
 
@@ -222,6 +243,7 @@ pub async fn ask_claude(
                     app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
                 }
                 app.emit("claude-done", ()).map_err(|e| e.to_string())?;
+                eprintln!("[jarvis] ask_claude: message_stop — spawn classify_and_stage");
                 tokio::spawn(classify_and_stage(user_text.clone(), api_key.clone(), app.clone()));
                 return Ok(());
             }
@@ -234,6 +256,7 @@ pub async fn ask_claude(
         app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
     }
     app.emit("claude-done", ()).map_err(|e| e.to_string())?;
+    eprintln!("[jarvis] ask_claude: fallback flush — spawn classify_and_stage");
     tokio::spawn(classify_and_stage(user_text, api_key, app));
     Ok(())
 }
