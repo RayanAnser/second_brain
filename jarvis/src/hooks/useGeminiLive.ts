@@ -26,6 +26,31 @@ Règles absolues :
 - Une question à la fois maximum`;
 }
 
+function pcm16ToWav(pcmBytes: Uint8Array, sampleRate: number): ArrayBuffer {
+  const numChannels = 1;
+  const bitsPerSample = 16;
+  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+  const blockAlign = numChannels * bitsPerSample / 8;
+  const dataSize = pcmBytes.length;
+  const buffer = new ArrayBuffer(44 + dataSize);
+  const view = new DataView(buffer);
+  view.setUint32(0, 0x52494646, false); // "RIFF"
+  view.setUint32(4, 36 + dataSize, true);
+  view.setUint32(8, 0x57415645, false); // "WAVE"
+  view.setUint32(12, 0x666d7420, false); // "fmt "
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, byteRate, true);
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitsPerSample, true);
+  view.setUint32(36, 0x64617461, false); // "data"
+  view.setUint32(40, dataSize, true);
+  new Uint8Array(buffer, 44).set(pcmBytes);
+  return buffer;
+}
+
 function stripMarkdown(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, "")
@@ -78,10 +103,15 @@ export function useGeminiLive() {
 
   const speakSentence = useCallback((sentence: string) => {
     const clean = stripMarkdown(sentence).trim();
-    if (clean.length <= 3) return;
+    console.log("[jarvis] speakSentence: appelé —", JSON.stringify(clean.slice(0, 60)), `(${clean.length} chars)`);
+    if (clean.length <= 3) {
+      console.log("[jarvis] speakSentence: trop court, ignoré");
+      return;
+    }
 
     if (!ttsCtxRef.current) {
       const ctx = new AudioContext();
+      console.log("[jarvis] speakSentence: AudioContext créé — state:", ctx.state);
       ttsCtxRef.current = ctx;
       sourcesRef.current = [];
       playbackEndTimeRef.current = ctx.currentTime;
@@ -90,15 +120,27 @@ export function useGeminiLive() {
     }
 
     const audioCtx = ttsCtxRef.current;
-    // Fire TTS fetch immediately, schedule playback in order via chain
+    console.log("[jarvis] speakSentence: invoke synthesize_speech →", JSON.stringify(clean.slice(0, 60)));
     const fetchPromise = invoke<number[]>("synthesize_speech", { text: clean });
 
     scheduleChainRef.current = scheduleChainRef.current.then(async () => {
-      if (ttsCtxRef.current !== audioCtx) return; // cancelled
+      if (ttsCtxRef.current !== audioCtx) {
+        console.log("[jarvis] speakSentence: AudioContext changé (cancelled), abandon");
+        return;
+      }
       try {
         const bytes = await fetchPromise;
+        console.log("[jarvis] speakSentence: synthesize_speech retourné —", bytes.length, "bytes");
         if (ttsCtxRef.current !== audioCtx) return;
-        const buffer = await audioCtx.decodeAudioData(new Uint8Array(bytes).buffer);
+        if (bytes.length === 0) {
+          console.error("[jarvis] speakSentence: 0 bytes reçus — pas d'audio");
+          return;
+        }
+        const pcmBytes = new Uint8Array(bytes);
+        const wavBuf = pcm16ToWav(pcmBytes, 24000);
+        console.log("[jarvis] speakSentence: decodeAudioData sur WAV", wavBuf.byteLength, "bytes (PCM:", pcmBytes.length, "), ctx.state=", audioCtx.state);
+        const buffer = await audioCtx.decodeAudioData(wavBuf);
+        console.log("[jarvis] speakSentence: audio décodé — duration:", buffer.duration.toFixed(2), "s, sampleRate:", buffer.sampleRate);
         const source = audioCtx.createBufferSource();
         source.buffer = buffer;
         source.connect(audioCtx.destination);
@@ -106,14 +148,16 @@ export function useGeminiLive() {
         const startAt = Math.max(audioCtx.currentTime, playbackEndTimeRef.current);
         source.start(startAt);
         playbackEndTimeRef.current = startAt + buffer.duration;
+        console.log("[jarvis] speakSentence: source.start(", startAt.toFixed(3), ") — fin prévue à", playbackEndTimeRef.current.toFixed(3));
       } catch (err) {
-        console.error("[jarvis] TTS sentence error:", err);
+        console.error("[jarvis] speakSentence: ERREUR —", err);
       }
     });
   }, [setIsSpeaking]);
 
   const finishSpeaking = useCallback(() => {
     const audioCtx = ttsCtxRef.current;
+    console.log("[jarvis] finishSpeaking: appelé — audioCtx présent:", !!audioCtx);
     if (!audioCtx) return;
 
     scheduleChainRef.current.then(() => {
@@ -136,8 +180,14 @@ export function useGeminiLive() {
 
   // TTS event listeners (stable — deps are zustand setters)
   useEffect(() => {
-    const p1 = listen<string>("claude-sentence", (e) => speakSentence(e.payload));
-    const p2 = listen<void>("claude-done", () => finishSpeaking());
+    const p1 = listen<string>("claude-sentence", (e) => {
+      console.log("[jarvis] claude-sentence reçu:", JSON.stringify(e.payload.slice(0, 60)));
+      speakSentence(e.payload);
+    });
+    const p2 = listen<void>("claude-done", () => {
+      console.log("[jarvis] claude-done reçu → finishSpeaking");
+      finishSpeaking();
+    });
     return () => {
       p1.then((fn) => fn());
       p2.then((fn) => fn());
@@ -223,6 +273,13 @@ export function useGeminiLive() {
         const systemPrompt = memoryContext
           ? buildSystemPrompt(memoryContext.soul, memoryContext.user, memoryContext.memory)
           : "Tu es un assistant personnel. Réponds en français.";
+
+        // Réinitialiser la position de lecture avant chaque nouveau tour.
+        // Sans ça, playbackEndTimeRef accumule entre les tours si onended
+        // ne s'est pas déclenché (AudioContext réutilisé).
+        playbackEndTimeRef.current = 0;
+        sourcesRef.current = [];
+        scheduleChainRef.current = Promise.resolve();
 
         await invoke("ask_claude", { messages: history, systemPrompt });
       } catch (err) {
