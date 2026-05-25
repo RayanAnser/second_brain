@@ -7,3 +7,5 @@ groq>=0.9.0
 python-dotenv>=1.0.0
 requests>=2.31.0
 notebooklm-py>=0.4.1
+sentence-transformers>=3.0
+numpy>=1.24

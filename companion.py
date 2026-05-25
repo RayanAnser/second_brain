@@ -17,6 +17,8 @@ import threading
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
 
 import requests
 
@@ -32,6 +34,12 @@ import anthropic
 from groq import Groq
 
 from research_pipeline import run_research
+
+try:
+    from rag import init_rag, get_rag, format_search_results
+    _RAG_AVAILABLE = True
+except ImportError:
+    _RAG_AVAILABLE = False
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -87,6 +95,7 @@ STAGING_FILE       = MEMORY_DIR / "staging.json"
 COMMANDS_MD        = MEMORY_DIR / "COMMANDS.md"
 AGENDA_MD          = MEMORY_DIR / "agenda.md"
 CONSOLIDATION_FILE = MEMORY_DIR / "last_consolidation.json"
+RAG_DB             = MEMORY_DIR / "embeddings" / "index.db"
 
 # ── Clients ──────────────────────────────────────────────────────────────────
 claude = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
@@ -202,6 +211,8 @@ def write_user_update(patch: str):
     _invalidate_context_cache()
     log.info("user.md mis à jour.")
     _push_to_github(USER_MD, updated)
+    if _RAG_AVAILABLE and get_rag():
+        threading.Thread(target=get_rag().index_modified, daemon=True).start()
 
 
 def save_raw_log(user_id: int):
@@ -576,14 +587,15 @@ Intentions disponibles :
 - RESEARCH_REQUEST  : demande de recherche approfondie sur un sujet via NotebookLM (ex: "fais une recherche sur X", "explore le sujet Y", "crée un notebook sur Z")
 - AGENDA_ADD        : ajouter un rendez-vous, événement ou rappel dans l'agenda
 - AGENDA_QUERY      : consulter l'agenda (aujourd'hui, cette semaine, une date précise)
+- SEARCH_MEMORY     : recherche dans la mémoire personnelle (ex: "qu'est-ce que j'ai noté sur X", "cherche dans ma mémoire", "rappelle-moi ce que j'ai dit sur Y", "trouve dans mes notes")
 - CONVERSATION      : tout le reste (question, discussion, conseil)
 
 Format strict :
 {"intent": "...", "slug": "...", "content": "..."}
 
 Règles :
-- slug : kebab-case pour CAPTURE_* et RESEARCH_REQUEST ; nom exact de la page pour NOTION_READ/APPEND ; titre lisible pour NOTION_CREATE ; vide "" pour TACHE/CONVERSATION ; date YYYY-MM-DD calculée depuis la date fournie pour AGENDA_ADD ; "aujourd'hui"/"semaine" ou YYYY-MM-DD pour AGENDA_QUERY
-- content : version épurée et concise de l'info à retenir ; pour RESEARCH_REQUEST : requête de recherche précise en français ; vide "" pour CONVERSATION et NOTION_READ ; "HH:MM | description concise" pour AGENDA_ADD (heure au format 24h, ex: "14:00 | Dentiste — Dr. Martin") ; vide "" pour AGENDA_QUERY
+- slug : kebab-case pour CAPTURE_*, RESEARCH_REQUEST, SEARCH_MEMORY ; nom exact de la page pour NOTION_READ/APPEND ; titre lisible pour NOTION_CREATE ; vide "" pour TACHE/CONVERSATION ; date YYYY-MM-DD calculée depuis la date fournie pour AGENDA_ADD ; "aujourd'hui"/"semaine" ou YYYY-MM-DD pour AGENDA_QUERY
+- content : version épurée et concise de l'info à retenir ; pour RESEARCH_REQUEST et SEARCH_MEMORY : requête de recherche reformulée en français (précise, sans la demande méta) ; vide "" pour CONVERSATION et NOTION_READ ; "HH:MM | description concise" pour AGENDA_ADD (heure au format 24h, ex: "14:00 | Dentiste — Dr. Martin") ; vide "" pour AGENDA_QUERY
 - En cas de doute : CONVERSATION"""
 
 
@@ -1027,18 +1039,39 @@ async def transcribe_voice(file_path: str) -> str:
     return result.text
 
 
+# ── RAG helper ───────────────────────────────────────────────────────────────
+
+def _build_rag_injection(query: str) -> str:
+    """Lance une recherche RAG et retourne le bloc à injecter dans le message."""
+    if not _RAG_AVAILABLE:
+        return ""
+    rag = get_rag()
+    if rag is None:
+        return ""
+    results = rag.search(query)
+    if not results:
+        return ""
+    formatted = format_search_results(results, MEMORY_DIR)
+    return f'<MEMORY_SEARCH query="{query}">\n{formatted}\n</MEMORY_SEARCH>'
+
+
 # ── Claude conversation ──────────────────────────────────────────────────────
 
-async def ask_claude(user_message: str, user_id: int, extra_files: list[Path] = []) -> str:
+async def ask_claude(
+    user_message: str,
+    user_id: int,
+    extra_files: list[Path] = [],
+    context_injection: str = "",
+) -> str:
     history = conversations.setdefault(user_id, [])
 
-    # Build the stable base system prompt (no extra_files — keeps it cacheable).
-    # Extra memory files are injected as a prefix in the user turn instead.
+    # System prompt stable (sans extra_files) — préserve le cache prompt.
     base_system = build_system_prompt()
     sys_hash = hashlib.md5(base_system.encode()).hexdigest()[:8]
     log.info(f"ask_claude system_prompt md5={sys_hash} len={len(base_system)}")
 
-    effective_message = user_message
+    # Construit le contenu envoyé à l'API (extra_files + RAG injectés en préfixe).
+    api_content = user_message
     if extra_files:
         parts = []
         for path in extra_files:
@@ -1046,16 +1079,23 @@ async def ask_claude(user_message: str, user_id: int, extra_files: list[Path] = 
                 rel = path.relative_to(MEMORY_DIR.parent)
                 parts.append(f"<MEMORY_FILE path=\"{rel}\">\n{path.read_text()}\n</MEMORY_FILE>")
         if parts:
-            effective_message = "\n\n".join(parts) + "\n\n" + user_message
+            api_content = "\n\n".join(parts) + "\n\n" + api_content
+    if context_injection:
+        api_content = context_injection + "\n\n" + api_content
 
-    history.append({"role": "user", "content": effective_message})
+    # L'historique stocke uniquement le message brut — garde la conversation lisible
+    # et le contexte injecté hors de la fenêtre multi-tour.
+    history.append({"role": "user", "content": user_message})
     session_logs.setdefault(user_id, []).append(f"USER : {user_message}")
+
+    # Pour l'appel API : historique sans le dernier tour + message enrichi
+    api_messages = list(history[:-1]) + [{"role": "user", "content": api_content}]
 
     response = claude.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=1024,
         system=_cached_system(base_system),
-        messages=history
+        messages=api_messages,
     )
     _log_api_call(response, "ask_claude")
     reply = response.content[0].text
@@ -1076,11 +1116,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.chat.send_action("typing")
 
-    result, extra_files = await asyncio.gather(
-        classify_intent(text),
-        select_memory_files(text),
-    )
-    intent = result.get("intent", "CONVERSATION")
+    result  = await classify_intent(text)
+    intent  = result.get("intent", "CONVERSATION")
     content = result.get("content", text)
     slug    = result.get("slug", "")
 
@@ -1141,8 +1178,16 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(reply)
         return
 
+    if intent == "SEARCH_MEMORY":
+        query = content or text
+        injection = _build_rag_injection(query)
+        reply = await ask_claude(text, user_id, context_injection=injection)
+        await update.message.reply_text(md_to_html(reply), parse_mode="HTML")
+        return
+
     try:
-        reply = await ask_claude(text, user_id, extra_files)
+        injection = _build_rag_injection(text)
+        reply = await ask_claude(text, user_id, context_injection=injection)
         await update.message.reply_text(md_to_html(reply), parse_mode="HTML")
     except Exception as e:
         log.error(f"Erreur Claude : {e}")
@@ -1162,10 +1207,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         transcript = await transcribe_voice(tmp_path)
         log.info(f"Transcription : {transcript}")
 
-        result, extra_files = await asyncio.gather(
-            classify_intent(transcript),
-            select_memory_files(transcript),
-        )
+        result  = await classify_intent(transcript)
         intent  = result.get("intent", "CONVERSATION")
         content = result.get("content", transcript)
 
@@ -1189,8 +1231,14 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             slug = result.get("slug", "aujourd'hui")
             reply = dispatch_agenda_query(slug)
             await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n{reply}", parse_mode="HTML")
+        elif intent == "SEARCH_MEMORY":
+            query = result.get("content") or transcript
+            injection = _build_rag_injection(query)
+            reply = await ask_claude(transcript, user_id, context_injection=injection)
+            await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n{md_to_html(reply)}", parse_mode="HTML")
         else:
-            reply = await ask_claude(transcript, user_id, extra_files)
+            injection = _build_rag_injection(transcript)
+            reply = await ask_claude(transcript, user_id, context_injection=injection)
             await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n{md_to_html(reply)}", parse_mode="HTML")
     except Exception as e:
         log.error(f"Erreur voice : {e}")
@@ -1253,6 +1301,8 @@ async def handle_memory_callback(update: Update, context: ContextTypes.DEFAULT_T
             ))
             conversations[user_id] = []
             session_logs[user_id]  = []
+            if _RAG_AVAILABLE and get_rag():
+                threading.Thread(target=get_rag().index_modified, daemon=True).start()
             n = len(modified)
             await query.edit_message_text(f"✅ {n} fichier(s) mis à jour. Session réinitialisée.")
         else:
@@ -1312,6 +1362,9 @@ async def handle_command_status(update: Update, context: ContextTypes.DEFAULT_TY
     lines = [f"{exchanges} échange(s) dans la session."]
     if staged:
         lines.append(f"{staged} capture(s) stagée(s) en attente.")
+    if _RAG_AVAILABLE and get_rag():
+        s = get_rag().stats()
+        lines.append(f"RAG index : {s['chunks']} chunks / {s['files']} fichier(s).")
     lines += ["/save pour organiser et sauvegarder.", "/reset pour repartir à zéro."]
     await update.message.reply_text("\n".join(lines))
 
@@ -1400,6 +1453,38 @@ async def handle_command_costs(update: Update, context: ContextTypes.DEFAULT_TYP
             out.append(f"{i}. `{fn}` — ${cost:.4f}")
 
     await update.message.reply_text("\n".join(out), parse_mode="Markdown")
+
+
+async def handle_command_search(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/search <query> — recherche sémantique dans la mémoire via RAG."""
+    query = " ".join(context.args).strip() if context.args else ""
+    if not query:
+        await update.message.reply_text(
+            "Utilisation : /search <requête>\n"
+            "Ex : /search projet de blog, idées sur l'IA, contact Dupont"
+        )
+        return
+
+    if not _RAG_AVAILABLE:
+        await update.message.reply_text("RAG non disponible (sentence-transformers manquant).")
+        return
+
+    rag = get_rag()
+    if rag is None:
+        await update.message.reply_text("Index RAG non initialisé.")
+        return
+
+    await update.message.chat.send_action("typing")
+    results = rag.search(query)
+    if not results:
+        await update.message.reply_text(f"Aucun résultat pertinent pour « {query} ».")
+        return
+
+    formatted = format_search_results(results, MEMORY_DIR)
+    injection  = f'<MEMORY_SEARCH query="{query}">\n{formatted}\n</MEMORY_SEARCH>'
+    user_id    = update.effective_user.id
+    reply      = await ask_claude(query, user_id, context_injection=injection)
+    await update.message.reply_text(md_to_html(reply), parse_mode="HTML")
 
 
 _DOC_SUBDIRS   = [("projets", PROJETS_DIR), ("concepts", CONCEPTS_DIR), ("perso", PERSO_DIR)]
@@ -1816,6 +1901,8 @@ def _run_consolidation() -> None:
         if ops:
             modified = execute_ops(ops)
             log.info(f"Consolidation : {len(modified)} fichier(s) mis à jour — {summary}")
+            if _RAG_AVAILABLE and get_rag():
+                threading.Thread(target=get_rag().index_modified, daemon=True).start()
         else:
             log.info(f"Consolidation : rien à retenir — {summary}")
     except Exception as e:
@@ -1872,6 +1959,7 @@ def main():
     app.add_handler(CommandHandler("status", handle_command_status))
     app.add_handler(CommandHandler("costs",  handle_command_costs))
     app.add_handler(CommandHandler("update", handle_command_update))
+    app.add_handler(CommandHandler("search", handle_command_search))
     app.add_handler(CommandHandler("docs",   handle_command_docs))
     app.add_handler(CallbackQueryHandler(handle_user_callback,   pattern="^usr_"))
     app.add_handler(CallbackQueryHandler(handle_doc_callback,    pattern="^doc_"))
@@ -1880,10 +1968,18 @@ def main():
     app.add_handler(MessageHandler(filters.VOICE, handle_voice))
 
     log.info(f"GitHub sync : GITHUB_REPO={GITHUB_REPO!r} GITHUB_BRANCH={GITHUB_BRANCH!r} token={'set' if GITHUB_TOKEN else 'ABSENT'}")
+
+    if _RAG_AVAILABLE:
+        rag = init_rag(RAG_DB, MEMORY_DIR)
+        log.info("RAG : index initialisé.")
+        threading.Thread(target=rag.index_modified, daemon=True, name="rag-init").start()
+    else:
+        log.warning("RAG non disponible : pip install sentence-transformers numpy")
+
     threading.Thread(target=_heartbeat_loop, daemon=True, name="heartbeat").start()
     log.info("Heartbeat thread démarré (digest à 8h00).")
 
-    log.info("🤖 Compagnon IA Sprint 2 démarré.")
+    log.info("🤖 Compagnon IA Sprint 7 démarré.")
     app.run_polling()
 
 
