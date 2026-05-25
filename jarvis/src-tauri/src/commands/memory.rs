@@ -1,5 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, path::PathBuf};
+use std::sync::OnceLock;
+
+static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
+
+fn http_client() -> &'static reqwest::Client {
+    HTTP_CLIENT.get_or_init(reqwest::Client::new)
+}
 
 fn memory_dir() -> PathBuf {
     let val = std::env::var("MEMORY_DIR").unwrap_or_else(|_| "./memory".to_string());
@@ -149,7 +156,7 @@ pub fn read_staging() -> Vec<Capture> {
 }
 
 #[tauri::command]
-pub fn delete_staging(index: usize) -> Result<Vec<Capture>, String> {
+pub async fn delete_staging(index: usize) -> Result<Vec<Capture>, String> {
     let path    = memory_dir().join("staging.json");
     let content = fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
     let mut json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
@@ -179,6 +186,15 @@ pub fn delete_staging(index: usize) -> Result<Vec<Capture>, String> {
 
     let updated = serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?;
     fs::write(&path, updated).map_err(|e| e.to_string())?;
+
+    // Notify companion to purge from RAM (fire-and-forget — companion may be down)
+    let companion_url = std::env::var("COMPANION_URL")
+        .unwrap_or_else(|_| "http://localhost:8765".to_string());
+    let _ = http_client()
+        .post(format!("{companion_url}/delete_staging"))
+        .json(&serde_json::json!({"index": index}))
+        .send()
+        .await;
 
     Ok(captures_from_json(&json))
 }

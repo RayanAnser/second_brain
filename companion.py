@@ -595,14 +595,15 @@ Intentions disponibles :
 - AGENDA_ADD        : ajouter un rendez-vous, événement ou rappel dans l'agenda
 - AGENDA_QUERY      : consulter l'agenda (aujourd'hui, cette semaine, une date précise)
 - SEARCH_MEMORY     : recherche dans la mémoire personnelle (ex: "qu'est-ce que j'ai noté sur X", "cherche dans ma mémoire", "rappelle-moi ce que j'ai dit sur Y", "trouve dans mes notes")
+- DELETE_STAGING    : supprimer une capture en attente (ex: "supprime la capture X", "enlève X de mes captures", "retire ça du staging")
 - CONVERSATION      : tout le reste (question, discussion, conseil)
 
 Format strict :
 {"intent": "...", "slug": "...", "content": "..."}
 
 Règles :
-- slug : kebab-case pour CAPTURE_*, RESEARCH_REQUEST, SEARCH_MEMORY ; nom exact de la page pour NOTION_READ/APPEND ; titre lisible pour NOTION_CREATE ; vide "" pour TACHE/CONVERSATION ; date YYYY-MM-DD calculée depuis la date fournie pour AGENDA_ADD ; "aujourd'hui"/"semaine" ou YYYY-MM-DD pour AGENDA_QUERY
-- content : version épurée et concise de l'info à retenir ; pour RESEARCH_REQUEST et SEARCH_MEMORY : requête de recherche reformulée en français (précise, sans la demande méta) ; vide "" pour CONVERSATION et NOTION_READ ; "HH:MM | description concise" pour AGENDA_ADD (heure au format 24h, ex: "14:00 | Dentiste — Dr. Martin") ; vide "" pour AGENDA_QUERY
+- slug : kebab-case pour CAPTURE_*, RESEARCH_REQUEST, SEARCH_MEMORY ; nom exact de la page pour NOTION_READ/APPEND ; titre lisible pour NOTION_CREATE ; vide "" pour TACHE/CONVERSATION/DELETE_STAGING ; date YYYY-MM-DD calculée depuis la date fournie pour AGENDA_ADD ; "aujourd'hui"/"semaine" ou YYYY-MM-DD pour AGENDA_QUERY
+- content : version épurée et concise de l'info à retenir ; pour RESEARCH_REQUEST et SEARCH_MEMORY : requête de recherche reformulée en français (précise, sans la demande méta) ; vide "" pour CONVERSATION et NOTION_READ ; "HH:MM | description concise" pour AGENDA_ADD (heure au format 24h, ex: "14:00 | Dentiste — Dr. Martin") ; vide "" pour AGENDA_QUERY ; fragment de texte à chercher dans les captures pour DELETE_STAGING
 - En cas de doute : CONVERSATION"""
 
 
@@ -1064,6 +1065,57 @@ def _build_rag_injection(query: str) -> str:
 
 # ── HTTP companion server ─────────────────────────────────────────────────────
 
+def _delete_staging_by_content(query: str) -> str | None:
+    """Cherche dans tous les buckets (tri alphabétique des clés = ordre BTreeMap Rust).
+
+    Retourne le contenu supprimé ou None si introuvable.
+    """
+    query_low = query.lower()
+    for uid in sorted(staged_captures.keys(), key=str):
+        captures = staged_captures[uid]
+        for i, cap in enumerate(captures):
+            if query_low in cap.get("content", "").lower():
+                content = cap.get("content")
+                captures.pop(i)
+                if not captures:
+                    del staged_captures[uid]
+                STAGING_FILE.write_text(json.dumps(
+                    {str(k): v for k, v in staged_captures.items()},
+                    ensure_ascii=False, indent=2,
+                ))
+                return content
+    return None
+
+
+async def _http_delete_staging(request):
+    try:
+        data  = await request.json()
+        index = int(data.get("index", -1))
+        if index < 0:
+            return aiohttp_web.Response(status=400, text="index required")
+
+        flat_idx = 0
+        for uid in sorted(staged_captures.keys(), key=str):
+            captures = staged_captures[uid]
+            for i, cap in enumerate(captures):
+                if flat_idx == index:
+                    captures.pop(i)
+                    if not captures:
+                        del staged_captures[uid]
+                    STAGING_FILE.write_text(json.dumps(
+                        {str(k): v for k, v in staged_captures.items()},
+                        ensure_ascii=False, indent=2,
+                    ))
+                    log.info(f"[delete_staging] index={index} supprimé de la RAM")
+                    return aiohttp_web.json_response({"ok": True})
+                flat_idx += 1
+
+        return aiohttp_web.Response(status=404, text=f"index {index} hors limites")
+    except Exception as e:
+        log.error(f"HTTP /delete_staging : {e}")
+        return aiohttp_web.Response(status=500, text=str(e))
+
+
 async def _http_stage(request):
     try:
         data    = await request.json()
@@ -1221,6 +1273,15 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(md_to_html(reply), parse_mode="HTML")
         return
 
+    if intent == "DELETE_STAGING":
+        query   = content or slug or text
+        deleted = _delete_staging_by_content(query)
+        if deleted:
+            await update.message.reply_text(f"✅ Capture supprimée : «{deleted}»")
+        else:
+            await update.message.reply_text(f"❌ Aucune capture trouvée pour «{query}»")
+        return
+
     try:
         injection = _build_rag_injection(text)
         reply = await ask_claude(text, user_id, context_injection=injection)
@@ -1272,6 +1333,13 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             injection = _build_rag_injection(query)
             reply = await ask_claude(transcript, user_id, context_injection=injection)
             await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n{md_to_html(reply)}", parse_mode="HTML")
+        elif intent == "DELETE_STAGING":
+            query   = content or result.get("slug", "") or transcript
+            deleted = _delete_staging_by_content(query)
+            if deleted:
+                await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n✅ Capture supprimée : «{deleted}»", parse_mode="HTML")
+            else:
+                await update.message.reply_text(f"<i>{html.escape(transcript)}</i>\n\n❌ Aucune capture trouvée pour «{query}»", parse_mode="HTML")
         else:
             injection = _build_rag_injection(transcript)
             reply = await ask_claude(transcript, user_id, context_injection=injection)
@@ -1983,8 +2051,9 @@ async def on_startup(app):
 
     if _AIOHTTP_AVAILABLE:
         _http_app = aiohttp_web.Application()
-        _http_app.router.add_post("/stage", _http_stage)
-        _http_app.router.add_post("/task",  _http_task)
+        _http_app.router.add_post("/stage",          _http_stage)
+        _http_app.router.add_post("/task",           _http_task)
+        _http_app.router.add_post("/delete_staging", _http_delete_staging)
         runner = aiohttp_web.AppRunner(_http_app)
         await runner.setup()
         site = aiohttp_web.TCPSite(runner, "0.0.0.0", 8765)
