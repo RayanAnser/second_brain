@@ -36,7 +36,7 @@ from groq import Groq
 from research_pipeline import run_research
 
 try:
-    from rag import init_rag, get_rag, format_search_results
+    from rag import init_rag, get_rag, format_search_results, _embed as rag_embed
     _RAG_AVAILABLE = True
 except ImportError:
     _RAG_AVAILABLE = False
@@ -1070,24 +1070,62 @@ def _build_rag_injection(query: str) -> str:
 # ── HTTP companion server ─────────────────────────────────────────────────────
 
 def _delete_staging_by_content(query: str) -> str | None:
-    """Cherche dans tous les buckets (tri alphabétique des clés = ordre BTreeMap Rust).
+    """Supprime la capture la plus similaire sémantiquement à `query` dans le bucket CHAT_ID.
 
-    Retourne le contenu supprimé ou None si introuvable.
+    Utilise rag._embed() (OpenAI ou sentence-transformers selon l'env) avec seuil 0.4.
+    Fallback substring si RAG indisponible.
+    Retourne le contenu supprimé ou None.
     """
-    query_low = query.lower()
-    for uid in sorted(staged_captures.keys(), key=str):
-        captures = staged_captures[uid]
-        for i, cap in enumerate(captures):
-            if query_low in cap.get("content", "").lower():
-                content = cap.get("content")
-                captures.pop(i)
+    uid = int(CHAT_ID)
+    captures = staged_captures.get(uid, [])
+    if not captures:
+        return None
+
+    texts = [cap.get("content", "") for cap in captures]
+
+    if _RAG_AVAILABLE:
+        try:
+            import numpy as np
+            vecs    = rag_embed([query] + texts)   # (1 + n, dim), L2-normalisé
+            q_vec   = vecs[0]
+            c_vecs  = vecs[1:]
+            scores  = (c_vecs @ q_vec).flatten()
+            best_i  = int(np.argmax(scores))
+            best_score = float(scores[best_i])
+            log.info(
+                f"[delete_by_content] query={query!r} "
+                f"→ best_score={best_score:.3f} cap={texts[best_i]!r}"
+            )
+            if best_score >= 0.4:
+                content = captures[best_i].get("content")
+                captures.pop(best_i)
                 if not captures:
-                    del staged_captures[uid]
+                    staged_captures.pop(uid, None)
                 STAGING_FILE.write_text(json.dumps(
                     {str(k): v for k, v in staged_captures.items()},
                     ensure_ascii=False, indent=2,
                 ))
                 return content
+            log.info(
+                f"[delete_by_content] score {best_score:.3f} < 0.4 — aucune capture supprimée"
+            )
+            return None
+        except Exception as e:
+            log.warning(f"[delete_by_content] embed échoué ({e}), fallback substring")
+
+    # Fallback : correspondance substring simple
+    query_low = query.lower()
+    for i, cap in enumerate(captures):
+        if query_low in cap.get("content", "").lower():
+            content = cap.get("content")
+            captures.pop(i)
+            if not captures:
+                staged_captures.pop(uid, None)
+            STAGING_FILE.write_text(json.dumps(
+                {str(k): v for k, v in staged_captures.items()},
+                ensure_ascii=False, indent=2,
+            ))
+            return content
     return None
 
 
