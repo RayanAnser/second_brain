@@ -92,10 +92,21 @@ def _get_openai_client():
 def _embed(texts: list[str]) -> np.ndarray:
     """Encode une liste de textes en embeddings L2-normalisés."""
     if _OPENAI_API_KEY:
-        resp = _get_openai_client().embeddings.create(model=_OPENAI_MODEL, input=texts)
-        vecs = np.array([d.embedding for d in resp.data], dtype=np.float32)
-        norms = np.linalg.norm(vecs, axis=1, keepdims=True)
-        return vecs / np.maximum(norms, 1e-10)
+        try:
+            resp = _get_openai_client().embeddings.create(model=_OPENAI_MODEL, input=texts)
+            vecs = np.array([d.embedding for d in resp.data], dtype=np.float32)
+            norms = np.linalg.norm(vecs, axis=1, keepdims=True)
+            return vecs / np.maximum(norms, 1e-10)
+        except Exception as e:
+            is_quota = (
+                getattr(e, "status_code", None) == 429
+                or "quota" in str(e).lower()
+                or "rate_limit" in str(e).lower()
+            )
+            if is_quota:
+                log.warning(f"RAG : quota OpenAI dépassé, fallback sentence-transformers. ({e})")
+            else:
+                raise
     return _get_encoder().encode(
         texts,
         normalize_embeddings=True,
