@@ -4,10 +4,10 @@ import { listen } from "@tauri-apps/api/event";
 import { ConversationArea } from "./components/ConversationArea";
 import { Sidebar } from "./components/Sidebar";
 import { useStore } from "./store";
-import type { MemoryContext } from "./types";
+import type { Capture, MemoryContext } from "./types";
 
 export default function App() {
-  const { setMemoryContext } = useStore();
+  const { setMemoryContext, setCaptures } = useStore();
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -21,6 +21,7 @@ export default function App() {
       if (toastTimer.current) clearTimeout(toastTimer.current);
       setToast(e.payload);
       toastTimer.current = setTimeout(() => setToast(null), 2000);
+      invoke<Capture[]>("read_staging").then(setCaptures).catch(console.error);
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
@@ -48,7 +49,7 @@ export default function App() {
 
       {/* Capture toast */}
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 bg-surface border border-border rounded px-3 py-1.5 text-xs text-muted font-mono pointer-events-none">
+        <div className="fixed bottom-4 right-4 z-50 bg-[#252640] border border-[#4a4b6e] rounded px-3 py-1.5 text-xs text-[#e0e0f0] font-mono pointer-events-none shadow-lg">
           {toast}
         </div>
       )}

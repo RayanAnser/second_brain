@@ -14,7 +14,22 @@ export function StagingPanel() {
   const { captures, setCaptures } = useStore();
 
   useEffect(() => {
-    invoke<Capture[]>("read_staging").then(setCaptures).catch(console.error);
+    console.log("[jarvis] StagingPanel: monté, polling démarré");
+    const load = () => {
+      console.log("[jarvis] StagingPanel: read_staging...");
+      invoke<Capture[]>("read_staging")
+        .then((data) => {
+          console.log("[jarvis] StagingPanel: read_staging →", data);
+          setCaptures(data);
+        })
+        .catch((e) => console.error("[jarvis] StagingPanel: read_staging erreur:", e));
+    };
+    load();
+    const id = setInterval(load, 5000);
+    return () => {
+      console.log("[jarvis] StagingPanel: démonté, polling arrêté");
+      clearInterval(id);
+    };
   }, []);
 
   if (captures.length === 0) {
