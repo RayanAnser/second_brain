@@ -6,24 +6,14 @@
       "timestamp": "2026-05-25 19:22"
     },
     {
-      "content": "Recette : poireaux vinaigrettes",
-      "hint": "CAPTURE_IDEE",
-      "timestamp": "2026-05-25 19:23"
-    },
-    {
-      "content": "Ne pas utiliser : blanquettes de veau",
-      "hint": "CAPTURE_IDEE",
-      "timestamp": "2026-05-25 19:23"
-    },
-    {
-      "content": "Ne pas utiliser : steaks frites",
-      "hint": "CAPTURE_IDEE",
-      "timestamp": "2026-05-25 19:23"
-    },
-    {
       "content": "steaks frites",
       "hint": "CAPTURE_IDEE",
       "timestamp": "2026-05-25 19:24"
+    },
+    {
+      "content": "hors vinaigrette",
+      "hint": "CAPTURE_IDEE",
+      "timestamp": "2026-05-25 19:32"
     }
   ]
 }

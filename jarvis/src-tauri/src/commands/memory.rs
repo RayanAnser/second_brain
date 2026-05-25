@@ -147,6 +147,13 @@ fn captures_from_json(json: &serde_json::Value) -> Vec<Capture> {
     captures
 }
 
+fn read_staging_file() -> Vec<Capture> {
+    let path    = memory_dir().join("staging.json");
+    let content = fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
+    let json: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+    captures_from_json(&json)
+}
+
 async fn fetch_staging_impl(companion_url: &str) -> Vec<Capture> {
     if let Ok(resp) = http_client()
         .get(format!("{companion_url}/staging"))
@@ -159,7 +166,8 @@ async fn fetch_staging_impl(companion_url: &str) -> Vec<Capture> {
             }
         }
     }
-    read_staging()
+    eprintln!("[jarvis] fetch_staging_impl: companion injoignable — fallback staging.json");
+    read_staging_file()
 }
 
 fn delete_from_file(index: usize) -> Result<Vec<Capture>, String> {
@@ -196,12 +204,14 @@ pub async fn fetch_staging() -> Vec<Capture> {
     fetch_staging_impl(&companion_url).await
 }
 
+/// Reads the authoritative capture list from companion RAM.
+/// Falls back to staging.json if companion is unreachable.
+/// Identical to fetch_staging — kept for backward compatibility.
 #[tauri::command]
-pub fn read_staging() -> Vec<Capture> {
-    let path    = memory_dir().join("staging.json");
-    let content = fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
-    let json: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
-    captures_from_json(&json)
+pub async fn read_staging() -> Vec<Capture> {
+    let companion_url = std::env::var("COMPANION_URL")
+        .unwrap_or_else(|_| "http://localhost:8765".to_string());
+    fetch_staging_impl(&companion_url).await
 }
 
 /// Deletes the capture at `index` (position within the CHAT_ID bucket as
