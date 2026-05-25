@@ -6,6 +6,7 @@ Ajout : extraction mémoire automatique + validation + écriture dans memory.md
 
 import asyncio
 import base64
+import hashlib
 import html
 import json
 import logging
@@ -1030,13 +1031,30 @@ async def transcribe_voice(file_path: str) -> str:
 
 async def ask_claude(user_message: str, user_id: int, extra_files: list[Path] = []) -> str:
     history = conversations.setdefault(user_id, [])
-    history.append({"role": "user", "content": user_message})
+
+    # Build the stable base system prompt (no extra_files — keeps it cacheable).
+    # Extra memory files are injected as a prefix in the user turn instead.
+    base_system = build_system_prompt()
+    sys_hash = hashlib.md5(base_system.encode()).hexdigest()[:8]
+    log.info(f"ask_claude system_prompt md5={sys_hash} len={len(base_system)}")
+
+    effective_message = user_message
+    if extra_files:
+        parts = []
+        for path in extra_files:
+            if path.exists():
+                rel = path.relative_to(MEMORY_DIR.parent)
+                parts.append(f"<MEMORY_FILE path=\"{rel}\">\n{path.read_text()}\n</MEMORY_FILE>")
+        if parts:
+            effective_message = "\n\n".join(parts) + "\n\n" + user_message
+
+    history.append({"role": "user", "content": effective_message})
     session_logs.setdefault(user_id, []).append(f"USER : {user_message}")
 
     response = claude.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=1024,
-        system=_cached_system(build_system_prompt(extra_files)),
+        system=_cached_system(base_system),
         messages=history
     )
     _log_api_call(response, "ask_claude")

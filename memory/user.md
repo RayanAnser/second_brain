@@ -24,6 +24,9 @@
 - **Agent de coding musical** — expérimentation avec Strudel (live coding musical)
 - **Tests OpenClaw** — exploration en local avec interface Telegram
 
+**Projets archivés :**
+- Agent de traduction IA (abandonné 2026-05-22, bloqué sur architecture)
+
 ## Comment je fonctionne
 - Je **fonce et j'itère** — mais seulement quand le cadre est posé
 - Mon point fort : **les idées et la vision**

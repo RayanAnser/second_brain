@@ -10,6 +10,31 @@
 > Ce sur quoi je travaille en ce moment. Mis à jour quand le statut change.
 
 ### Compagnon IA personnel (ce système)
+- **Statut** : V0.1 validée — Sprint 6 (consolidation nocturne) opérationnel, optimisations coûts/latence déployées
+- **Contexte** : Second cerveau + mémoire persistante + voice-first français
+- **Dernière évolution** : Prompt caching Anthropic (-58% coûts), Haiku classify/select (-88% coûts vs Sonnet), async parallel (-300ms latence), nouveaux intents AGENDA_ADD/QUERY, heartbeat 8h, TTS ElevenLabs turbo (~500ms), cost tracking (/costs)
+- **Prochaine étape** : Sprint 7 (RAG SQLite) — recherche vectorielle dans mémoire accumulée
+- **Stack retenue** : Obsidian (mémoire locale) + Claude Code (cerveau) + Groq Whisper (voix) + Telegram (mobile) + Desktop v0.1.0 + Python (skills) + Notion + NotebookLM + GitHub Sync
+
+### Agent de coding musical — Strudel
+- **Statut** : Expérimentation — en veille
+- **Contexte** : Live coding musical avec Strudel
+- **Dernière évolution** : —
+- **Prochaine étape** : Définir un premier cas d'usage concret
+
+### Agent d'automatisation administrative
+- **Statut** : Idée — non formalisée
+- **Contexte** : Automatiser des tâches administratives chronophages
+- **Dernière évolution** : Capturé en session du 2026-05-18
+- **Prochaine étape** : Identifier les 2-3 tâches administratives concrètes qui bouffent le plus de temps
+
+### OpenClaw — exploration
+- **Statut** : Test local
+- **Contexte** : Testé avec interface Telegram
+- **Dernière évolution** : —
+- **Prochaine étape** : Évaluer l'intégration dans l'architecture compagnon
+
+### Compagnon IA personnel (ce système)
 - **Statut** : Sprint 5 terminé — GitHub Sync fonctionnel
 - **Contexte** : Second cerveau + mémoire persistante + voice-first français
 - **Dernière évolution** : L'écriture sur GitHub est maintenant fonctionnelle. Plus besoin de configurer GITHUB_TOKEN ni GITHUB_REPO dans les variables d'environnement.
@@ -136,6 +161,8 @@
 | 2026-05-20 | Intégration Google Calendar et Proton pour synchroniser les calendriers | Compagnon IA | Capturé |
 | 2026-05-20 | Explorer autres concepts Bourdieu : champ, violence symbolique, distinction | Concepts | Capturé |
 | 2026-05-22 | Possibilité d'effacer/modifier certaines parties des fichiers capturés (idées périmées) | Compagnon IA | Capturé |
+| 2026-05-22 | Monitoring consommation API/tokens pour éviter surprises facturation | Compagnon IA | Capturé |
+| 2026-05-22 | Améliorer classification intentions : trop de messages conversationnels classés CAPTURE — renforcer détection CONVERSATION | Compagnon IA | Capturé |
 
 ## 🟢 Décisions prises
 
@@ -596,3 +623,30 @@
 **Fils ouverts :**
 - Sprint 7 (RAG SQLite) à lancer
 - Monitoring coûts : suivi long terme à faire
+
+
+### Session — 2026-05-25 00:14
+**Sujet principal :** Validation mémoire + archivage agent traduction
+
+**Contexte :**
+- Consolidation globale de la mémoire après Sprint 6
+- Archivage agent traduction confirmé (décision 2026-05-22 validée)
+- V0.1 Jarvis opérationnelle : mémoire connectée, vocal fluide, agenda synchronisé, cost tracking en place
+- Stack validée : Telegram + Groq Whisper + Claude Sonnet/Haiku + MD local + Desktop v0.1.0 + Python + Notion + NotebookLM + GitHub Sync
+
+**Optimisations Sprint 6 :**
+- Prompt caching Anthropic : -58% coûts (25k tokens system cachés)
+- Haiku pour classify/select : -88% coûts vs Sonnet
+- Async parallel classify+select : -300ms latence
+- Nouveaux intents opérationnels : AGENDA_ADD, AGENDA_QUERY (écriture/lecture agenda.md sans appel Claude)
+- Heartbeat 8h avec RDV du jour
+- TTS ElevenLabs turbo (~500ms)
+- Cost tracking actif (/costs)
+
+**Fils ouverts :**
+- Sprint 7 (RAG SQLite) : prochaine étape sur roadmap
+- Monitoring coûts long terme : suivi à faire
+
+**Observation :**
+- Système stable, usage quotidien à valider dans durée
+- Aucune nouvelle idée capturée — session de consolidation technique uniquement
