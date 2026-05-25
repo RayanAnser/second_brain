@@ -21,10 +21,12 @@ export default function App() {
       if (toastTimer.current) clearTimeout(toastTimer.current);
       setToast(e.payload);
       toastTimer.current = setTimeout(() => setToast(null), 2000);
-      // Deletes use embedding (OpenAI or local) which can take ~1-2s.
-      // Wait 2s before refreshing so companion has finished processing.
-      // Immediate refresh for all other events (captures, tasks).
-      const delay = e.payload.includes("supprimé") ? 2000 : 0;
+      // Deletes: 2s — embedding (OpenAI/local) runs before companion responds.
+      // Captures/tasks: 500ms — multiple sequential POSTs may still be in flight.
+      // Errors ("❌"): 0ms — nothing changed, refresh is a no-op anyway.
+      const delay = e.payload.includes("supprimé") || e.payload.includes("suppressions") ? 2000
+                  : e.payload.includes("noté")     || e.payload.includes("tâche")        ? 800
+                  : 0;
       setTimeout(
         () => invoke<Capture[]>("fetch_staging").then(setCaptures).catch(console.error),
         delay,

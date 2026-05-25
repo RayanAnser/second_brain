@@ -324,6 +324,10 @@
 - Ajouter test de bord de haut dans les trucs en staging
 - Garder les éléments en attente, effacer après validation du système. Tester Montpellier.
 - Ajouter une note sur le PQ et acheter du shampoing
+- Ajouter Indé
+- Ajouter 3x chouk chouka
+- Ajouter poireaux au vinaigre
+- Ajouter steak frites
 ### Session — 2026-05-20 21:32
 **Sujet principal** : Check rapide identité
 
