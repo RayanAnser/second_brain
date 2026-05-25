@@ -4,11 +4,11 @@ import { Message } from "./Message";
 import { AudioVisualizer } from "./AudioVisualizer";
 import { PushToTalkButton } from "./PushToTalkButton";
 import { useClaudeStream } from "../hooks/useClaudeStream";
-import { usePushToTalk } from "../hooks/usePushToTalk";
+import { useGeminiLive } from "../hooks/useGeminiLive";
 
 export function ConversationArea() {
   useClaudeStream();
-  const { startListening, stopListening } = usePushToTalk();
+  const { startListening, stopListening } = useGeminiLive();
   const { messages, isListening, isSpeaking, isThinking } = useStore();
   const bottomRef = useRef<HTMLDivElement>(null);
 

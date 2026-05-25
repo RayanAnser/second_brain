@@ -21,9 +21,9 @@ pub fn run() {
             commands::memory::read_staging,
             commands::memory::delete_staging,
             commands::memory::debug_memory,
-            commands::groq::transcribe_audio,
+            commands::gemini_live::transcribe_gemini,
             commands::claude::ask_claude,
-            commands::tts::synthesize_speech,
+            commands::gemini_tts::synthesize_speech,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
