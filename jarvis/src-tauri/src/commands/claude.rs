@@ -143,14 +143,41 @@ async fn classify_and_stage(text: String, api_key: String, app: AppHandle) {
         .unwrap_or_else(|_| "http://localhost:8765".to_string());
 
     if is_delete {
-        let _ = app.emit("claude-capture", "🗑 supprimé");
         let payload = serde_json::json!({"query": content});
         eprintln!("[jarvis] classify_and_stage: DELETE_STAGING query={:?}", content);
-        let _ = http_client()
+        let toast = match http_client()
             .post(format!("{companion_url}/delete_staging_by_content"))
             .json(&payload)
             .send()
-            .await;
+            .await
+        {
+            Ok(resp) if resp.status().is_success() => {
+                match resp.json::<serde_json::Value>().await {
+                    Ok(body) if body["ok"] == true => {
+                        let deleted = body["deleted"].as_str().unwrap_or("?");
+                        eprintln!("[jarvis] DELETE_STAGING ok — supprimé: {deleted:?}");
+                        format!("🗑 supprimé : {deleted}")
+                    }
+                    Ok(_) => {
+                        eprintln!("[jarvis] DELETE_STAGING ok=false — non trouvé");
+                        "❌ non trouvé".to_string()
+                    }
+                    Err(e) => {
+                        eprintln!("[jarvis] DELETE_STAGING parse error: {e}");
+                        "❌ non trouvé".to_string()
+                    }
+                }
+            }
+            Ok(resp) => {
+                eprintln!("[jarvis] DELETE_STAGING HTTP {}", resp.status());
+                "❌ non trouvé".to_string()
+            }
+            Err(e) => {
+                eprintln!("[jarvis] DELETE_STAGING companion down: {e}");
+                "❌ non trouvé".to_string()
+            }
+        };
+        let _ = app.emit("claude-capture", toast);
         return;
     }
 
