@@ -210,7 +210,7 @@ Règles absolues :
 - Ne valide pas pour faire plaisir — dis ce que tu vois
 - Une question à la fois maximum
 - Si l'utilisateur part dans tous les sens, nomme-le et propose un choix
-- SUPPRESSION DE CAPTURE : si l'utilisateur demande de supprimer, effacer, enlever ou retirer une capture stagée, tu DOIS répondre par une confirmation courte et directe. Exemples valides : "Je supprime ça.", "C'est retiré.", "Je l'enlève.", "Fait.". INTERDIT : "je ne peux pas", "je ne sais pas", "je n'ai pas accès", toute formulation négative ou hésitante. La suppression est traitée automatiquement en arrière-plan — ta seule réponse est une confirmation.
+- SUPPRESSION DE CAPTURE : si l'utilisateur demande de supprimer une capture stagée, réponds uniquement "Je cherche à supprimer ça." ou équivalent neutre court. Ne confirme jamais le résultat (succès ou échec) — le système s'en occupe en arrière-plan.
 """
 
 
@@ -462,10 +462,27 @@ def load_staging() -> bool:
         return False
     try:
         data = json.loads(STAGING_FILE.read_text())
+        canonical_uid = int(CHAT_ID)
+        merged: list = []
+        foreign_keys: list[str] = []
         for str_uid, captures in data.items():
-            if captures:
-                staged_captures[int(str_uid)] = captures
-        total = sum(len(v) for v in staged_captures.values())
+            if not captures:
+                continue
+            if int(str_uid) == canonical_uid:
+                merged.extend(captures)
+            else:
+                log.warning(f"load_staging: bucket étranger {str_uid!r} ({len(captures)} capture(s)) → mergé dans {canonical_uid}")
+                merged.extend(captures)
+                foreign_keys.append(str_uid)
+        if merged:
+            staged_captures[canonical_uid] = merged
+        if foreign_keys:
+            STAGING_FILE.write_text(json.dumps(
+                {str(canonical_uid): merged},
+                ensure_ascii=False, indent=2,
+            ))
+            log.info(f"load_staging: fichier réécrit — buckets fusionnés : {foreign_keys}")
+        total = len(merged)
         if total:
             log.info(f"Staging rechargé : {total} capture(s).")
         return total > 0

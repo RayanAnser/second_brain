@@ -21,10 +21,14 @@ export default function App() {
       if (toastTimer.current) clearTimeout(toastTimer.current);
       setToast(e.payload);
       toastTimer.current = setTimeout(() => setToast(null), 2000);
-      // Always refresh — covers both new captures and successful deletes.
-      // For deletes: fetch_staging runs AFTER companion has committed the change
-      // (claude.rs emits this event only once /delete_staging_by_content responds).
-      invoke<Capture[]>("fetch_staging").then(setCaptures).catch(console.error);
+      // Deletes use embedding (OpenAI or local) which can take ~1-2s.
+      // Wait 2s before refreshing so companion has finished processing.
+      // Immediate refresh for all other events (captures, tasks).
+      const delay = e.payload.includes("supprimé") ? 2000 : 0;
+      setTimeout(
+        () => invoke<Capture[]>("fetch_staging").then(setCaptures).catch(console.error),
+        delay,
+      );
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
