@@ -323,6 +323,7 @@
 - Ajouter un test 'Marseille 2' pour les captures en attente dans l'environnement staging
 - Ajouter test de bord de haut dans les trucs en staging
 - Garder les éléments en attente, effacer après validation du système. Tester Montpellier.
+- Ajouter une note sur le PQ et acheter du shampoing
 ### Session — 2026-05-20 21:32
 **Sujet principal** : Check rapide identité
 

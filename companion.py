@@ -1073,7 +1073,7 @@ def _build_rag_injection(query: str) -> str:
 def _delete_staging_by_content(query: str) -> str | None:
     """Supprime la capture la plus similaire sémantiquement à `query` dans le bucket CHAT_ID.
 
-    Utilise rag._embed() (OpenAI ou sentence-transformers selon l'env) avec seuil 0.4.
+    Utilise rag._embed() (OpenAI ou sentence-transformers selon l'env) avec seuil 0.45.
     Fallback substring si RAG indisponible.
     Retourne le contenu supprimé ou None.
     """
@@ -1097,7 +1097,7 @@ def _delete_staging_by_content(query: str) -> str | None:
                 f"[delete_by_content] query={query!r} "
                 f"→ best_score={best_score:.3f} cap={texts[best_i]!r}"
             )
-            if best_score >= 0.4:
+            if best_score >= 0.45:
                 content = captures[best_i].get("content")
                 captures.pop(best_i)
                 if not captures:
@@ -1108,7 +1108,7 @@ def _delete_staging_by_content(query: str) -> str | None:
                 ))
                 return content
             log.info(
-                f"[delete_by_content] score {best_score:.3f} < 0.4 — aucune capture supprimée"
+                f"[delete_by_content] score {best_score:.3f} < 0.45 — aucune capture supprimée"
             )
             return None
         except Exception as e:
