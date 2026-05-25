@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useStore } from "../store";
 import type { Capture } from "../types";
@@ -12,6 +12,7 @@ const INTENT_LABEL: Record<string, string> = {
 
 export function StagingPanel() {
   const { captures, setCaptures } = useStore();
+  const [deleting, setDeleting] = useState(false);
 
   const loadCaptures = () =>
     invoke<Capture[]>("fetch_staging")
@@ -24,6 +25,15 @@ export function StagingPanel() {
     return () => clearInterval(id);
   }, []);
 
+  const deleteCapture = (i: number) => {
+    if (deleting) return;
+    setDeleting(true);
+    invoke<Capture[]>("delete_staging", { index: i })
+      .then(setCaptures)
+      .catch((e) => console.error("[jarvis] delete_staging erreur:", e))
+      .finally(() => setDeleting(false));
+  };
+
   if (captures.length === 0) {
     return (
       <p className="text-xs text-muted text-center py-4">
@@ -31,12 +41,6 @@ export function StagingPanel() {
       </p>
     );
   }
-
-  const deleteCapture = (i: number) => {
-    invoke("delete_staging", { index: i })
-      .then(() => loadCaptures())
-      .catch((e) => console.error("[jarvis] delete_staging erreur:", e));
-  };
 
   return (
     <div className="space-y-2">
@@ -50,7 +54,10 @@ export function StagingPanel() {
           </div>
           <button
             onClick={() => deleteCapture(i)}
-            className="text-muted hover:text-red-400 text-xs leading-none flex-shrink-0 mt-0.5"
+            disabled={deleting}
+            className={`text-xs leading-none flex-shrink-0 mt-0.5 ${
+              deleting ? "text-muted opacity-30 cursor-not-allowed" : "text-muted hover:text-red-400"
+            }`}
           >
             ✕
           </button>

@@ -147,13 +147,7 @@ fn captures_from_json(json: &serde_json::Value) -> Vec<Capture> {
     captures
 }
 
-/// Fetches the authoritative capture list from companion RAM.
-/// Falls back to reading staging.json if companion is unreachable.
-#[tauri::command]
-pub async fn fetch_staging() -> Vec<Capture> {
-    let companion_url = std::env::var("COMPANION_URL")
-        .unwrap_or_else(|_| "http://localhost:8765".to_string());
-
+async fn fetch_staging_impl(companion_url: &str) -> Vec<Capture> {
     if let Ok(resp) = http_client()
         .get(format!("{companion_url}/staging"))
         .send()
@@ -165,9 +159,41 @@ pub async fn fetch_staging() -> Vec<Capture> {
             }
         }
     }
-
-    // Companion down — read from disk
     read_staging()
+}
+
+fn delete_from_file(index: usize) -> Result<Vec<Capture>, String> {
+    let path    = memory_dir().join("staging.json");
+    let content = fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
+    let mut json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+
+    {
+        let obj      = json.as_object_mut().ok_or("staging.json invalide")?;
+        let mut idx  = 0usize;
+        let mut found = false;
+        'outer: for list in obj.values_mut() {
+            if let Some(arr) = list.as_array_mut() {
+                for i in 0..arr.len() {
+                    if idx == index { arr.remove(i); found = true; break 'outer; }
+                    idx += 1;
+                }
+            }
+        }
+        if !found { return Err(format!("Index {} hors limites", index)); }
+    }
+
+    let updated = serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?;
+    fs::write(&path, updated).map_err(|e| e.to_string())?;
+    Ok(captures_from_json(&json))
+}
+
+/// Fetches the authoritative capture list from companion RAM.
+/// Falls back to reading staging.json if companion is unreachable.
+#[tauri::command]
+pub async fn fetch_staging() -> Vec<Capture> {
+    let companion_url = std::env::var("COMPANION_URL")
+        .unwrap_or_else(|_| "http://localhost:8765".to_string());
+    fetch_staging_impl(&companion_url).await
 }
 
 #[tauri::command]
@@ -178,46 +204,34 @@ pub fn read_staging() -> Vec<Capture> {
     captures_from_json(&json)
 }
 
+/// Deletes the capture at `index` (position within the CHAT_ID bucket as
+/// returned by GET /staging).  Companion is the authoritative owner — we ask
+/// it to delete first and use its returned list.  File-only fallback when
+/// companion is unreachable.
 #[tauri::command]
 pub async fn delete_staging(index: usize) -> Result<Vec<Capture>, String> {
-    let path    = memory_dir().join("staging.json");
-    let content = fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
-    let mut json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-
-    {
-        let obj = json.as_object_mut().ok_or("staging.json invalide")?;
-        let mut flat_idx = 0usize;
-        let mut found    = false;
-
-        'outer: for list in obj.values_mut() {
-            if let Some(arr) = list.as_array_mut() {
-                for i in 0..arr.len() {
-                    if flat_idx == index {
-                        arr.remove(i);
-                        found = true;
-                        break 'outer;
-                    }
-                    flat_idx += 1;
-                }
-            }
-        }
-
-        if !found {
-            return Err(format!("Index {} hors limites", index));
-        }
-    }
-
-    let updated = serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?;
-    fs::write(&path, updated).map_err(|e| e.to_string())?;
-
-    // Notify companion to purge from RAM (fire-and-forget — companion may be down)
     let companion_url = std::env::var("COMPANION_URL")
         .unwrap_or_else(|_| "http://localhost:8765".to_string());
-    let _ = http_client()
+
+    if let Ok(resp) = http_client()
         .post(format!("{companion_url}/delete_staging"))
         .json(&serde_json::json!({"index": index}))
         .send()
-        .await;
+        .await
+    {
+        if resp.status().is_success() {
+            if let Ok(data) = resp.json::<serde_json::Value>().await {
+                if let Ok(list) = serde_json::from_value::<Vec<Capture>>(data["captures"].clone()) {
+                    return Ok(list);
+                }
+            }
+            // Companion OK but response malformed — re-fetch authoritative state
+            return Ok(fetch_staging_impl(&companion_url).await);
+        }
+        // Companion returned an error (e.g. 404 out-of-bounds)
+        return Err(format!("companion /delete_staging: index {} hors limites", index));
+    }
 
-    Ok(captures_from_json(&json))
+    // Companion unreachable — fall back to direct file manipulation
+    delete_from_file(index)
 }

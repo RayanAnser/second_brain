@@ -1115,29 +1115,40 @@ async def _http_delete_staging_by_content(request):
 
 
 async def _http_delete_staging(request):
+    """Supprime la capture à l'index donné dans le bucket CHAT_ID.
+
+    L'index correspond directement à la position dans staged_captures[CHAT_ID],
+    qui est la même liste que celle renvoyée par GET /staging.
+    Retourne la liste mise à jour dans {"ok": true, "captures": [...]}.
+    """
     try:
         data  = await request.json()
         index = int(data.get("index", -1))
-        if index < 0:
-            return aiohttp_web.Response(status=400, text="index required")
+        uid   = int(CHAT_ID)
 
-        flat_idx = 0
-        for uid in sorted(staged_captures.keys(), key=str):
-            captures = staged_captures[uid]
-            for i, cap in enumerate(captures):
-                if flat_idx == index:
-                    captures.pop(i)
-                    if not captures:
-                        del staged_captures[uid]
-                    STAGING_FILE.write_text(json.dumps(
-                        {str(k): v for k, v in staged_captures.items()},
-                        ensure_ascii=False, indent=2,
-                    ))
-                    log.info(f"[delete_staging] index={index} supprimé de la RAM")
-                    return aiohttp_web.json_response({"ok": True})
-                flat_idx += 1
+        captures = staged_captures.get(uid, [])
+        if index < 0 or index >= len(captures):
+            return aiohttp_web.Response(
+                status=404,
+                text=f"index {index} hors limites ({len(captures)} captures)",
+            )
 
-        return aiohttp_web.Response(status=404, text=f"index {index} hors limites")
+        removed = captures.pop(index)
+        if not captures:
+            staged_captures.pop(uid, None)
+
+        STAGING_FILE.write_text(json.dumps(
+            {str(k): v for k, v in staged_captures.items()},
+            ensure_ascii=False, indent=2,
+        ))
+        log.info(f"[delete_staging] index={index} supprimé : {removed.get('content', '')!r}")
+
+        current = staged_captures.get(uid, [])
+        result  = [
+            {"intent": c.get("hint", c.get("intent", "?")), "content": c.get("content", "")}
+            for c in current
+        ]
+        return aiohttp_web.json_response({"ok": True, "captures": result})
     except Exception as e:
         log.error(f"HTTP /delete_staging : {e}")
         return aiohttp_web.Response(status=500, text=str(e))
