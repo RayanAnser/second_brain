@@ -198,7 +198,7 @@ def build_system_prompt(extra_files: list[Path] = []) -> str:
         if parts:
             extra = "\n\n" + "\n\n".join(parts)
 
-    return f"""Tu es le compagnon IA personnel de l'utilisateur.
+    prompt = f"""Tu es le compagnon IA personnel de l'utilisateur.
 Voici ton contexte complet — lis-le attentivement avant chaque réponse.
 
 {load_context()}{extra}
@@ -212,6 +212,9 @@ Règles absolues :
 - Si l'utilisateur part dans tous les sens, nomme-le et propose un choix
 - SUPPRESSION DE CAPTURE : si l'utilisateur demande de supprimer une capture stagée, réponds uniquement "Je cherche à supprimer ça." ou équivalent neutre court. Ne confirme jamais le résultat (succès ou échec) — le système s'en occupe en arrière-plan.
 """
+    delete_rule = next((l for l in prompt.splitlines() if "SUPPRESSION DE CAPTURE" in l), "(règle non trouvée)")
+    print(f"[build_system_prompt] règle DELETE_STAGING → {delete_rule!r}", flush=True)
+    return prompt
 
 
 
@@ -1090,7 +1093,7 @@ def _build_rag_injection(query: str) -> str:
 def _delete_staging_by_content(query: str) -> str | None:
     """Supprime la capture la plus similaire sémantiquement à `query` dans le bucket CHAT_ID.
 
-    Utilise rag._embed() (OpenAI ou sentence-transformers selon l'env) avec seuil 0.45.
+    Seuil adaptatif : 0.35 si query <= 2 mots (vague), 0.45 si >= 3 mots (précis).
     Fallback substring si RAG indisponible.
     Retourne le contenu supprimé ou None.
     """
@@ -1098,6 +1101,10 @@ def _delete_staging_by_content(query: str) -> str | None:
     captures = staged_captures.get(uid, [])
     if not captures:
         return None
+
+    n_words = len(query.split())
+    threshold = 0.35 if n_words <= 2 else 0.45
+    log.info(f"[delete_by_content] query={query!r} ({n_words} mot(s)) → seuil={threshold}")
 
     texts = [cap.get("content", "") for cap in captures]
 
@@ -1111,10 +1118,9 @@ def _delete_staging_by_content(query: str) -> str | None:
             best_i  = int(np.argmax(scores))
             best_score = float(scores[best_i])
             log.info(
-                f"[delete_by_content] query={query!r} "
-                f"→ best_score={best_score:.3f} cap={texts[best_i]!r}"
+                f"[delete_by_content] best_score={best_score:.3f} cap={texts[best_i]!r}"
             )
-            if best_score >= 0.45:
+            if best_score >= threshold:
                 content = captures[best_i].get("content")
                 captures.pop(best_i)
                 if not captures:
@@ -1125,7 +1131,7 @@ def _delete_staging_by_content(query: str) -> str | None:
                 ))
                 return content
             log.info(
-                f"[delete_by_content] score {best_score:.3f} < 0.45 — aucune capture supprimée"
+                f"[delete_by_content] score {best_score:.3f} < {threshold} — aucune capture supprimée"
             )
             return None
         except Exception as e:

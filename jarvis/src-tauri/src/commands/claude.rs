@@ -23,9 +23,9 @@ Intentions : CAPTURE_IDEE, CAPTURE_PROJET, CAPTURE_CONCEPT, CAPTURE_PERSO, TACHE
 - DELETE_STAGING : supprimer une capture en attente (ex: \"supprime la capture X\", \"enlève X\", \"retire ça\").\n\
 Format par défaut (un seul sujet) : {\"intent\": \"...\", \"content\": \"version épurée, concise\"}\n\
 - Pour DELETE_STAGING, content = fragment de texte à chercher dans les captures.\n\
-Si le message contient plusieurs idées distinctes à capturer (toutes CAPTURE_* ou TACHE), retourne un array :\n\
+Si le message contient plusieurs intentions distinctes (CAPTURE_*, TACHE ou DELETE_STAGING), retourne un array :\n\
 [{\"intent\": \"...\", \"content\": \"...\"}, {\"intent\": \"...\", \"content\": \"...\"}]\n\
-N'utilise l'array que si les idées sont vraiment distinctes. DELETE_STAGING et CONVERSATION : toujours un objet simple.\n\
+N'utilise l'array que si les intentions sont vraiment distinctes. CONVERSATION : toujours un objet simple.\n\
 En cas de doute : CONVERSATION.";
 
 fn is_speakable(s: &str) -> bool {
@@ -156,94 +156,92 @@ async fn classify_and_stage(text: String, api_key: String, app: AppHandle) {
     let companion_url = std::env::var("COMPANION_URL")
         .unwrap_or_else(|_| "http://localhost:8765".to_string());
 
-    // DELETE_STAGING — uniquement en objet simple (len==1)
-    if items.len() == 1 && items[0].0 == "DELETE_STAGING" {
-        let content = &items[0].1;
-        let payload = serde_json::json!({"query": content});
-        eprintln!("[jarvis] classify_and_stage: DELETE_STAGING query={content:?}");
-        let toast = match http_client()
-            .post(format!("{companion_url}/delete_staging_by_content"))
-            .json(&payload)
-            .send()
-            .await
-        {
-            Ok(resp) if resp.status().is_success() => {
-                match resp.json::<serde_json::Value>().await {
-                    Ok(body) if body["ok"] == true => {
-                        let deleted = body["deleted"].as_str().unwrap_or("?");
-                        eprintln!("[jarvis] DELETE_STAGING ok — supprimé: {deleted:?}");
-                        format!("🗑 supprimé : {deleted}")
-                    }
-                    Ok(_) => {
-                        eprintln!("[jarvis] DELETE_STAGING ok=false — non trouvé");
-                        "❌ non trouvé".to_string()
-                    }
-                    Err(e) => {
-                        eprintln!("[jarvis] DELETE_STAGING parse error: {e}");
-                        "❌ non trouvé".to_string()
-                    }
-                }
-            }
-            Ok(resp) => {
-                eprintln!("[jarvis] DELETE_STAGING HTTP {}", resp.status());
-                "❌ non trouvé".to_string()
-            }
-            Err(e) => {
-                eprintln!("[jarvis] DELETE_STAGING companion down: {e}");
-                "❌ non trouvé".to_string()
-            }
-        };
-        let _ = app.emit("claude-capture", toast);
-        return;
-    }
-
-    // Filtre les intents actionnables (CAPTURE_* et TACHE)
-    let actionable: Vec<&(String, String)> = items.iter()
-        .filter(|(intent, _)| matches!(
-            intent.as_str(),
+    // Sépare suppressions et captures actionnables
+    let deletes:  Vec<&(String, String)> = items.iter()
+        .filter(|(i, _)| i == "DELETE_STAGING")
+        .collect();
+    let captures: Vec<&(String, String)> = items.iter()
+        .filter(|(i, _)| matches!(
+            i.as_str(),
             "CAPTURE_IDEE" | "CAPTURE_PROJET" | "CAPTURE_CONCEPT" | "CAPTURE_PERSO" | "TACHE"
         ))
         .collect();
 
-    if actionable.is_empty() {
+    if deletes.is_empty() && captures.is_empty() {
         eprintln!("[jarvis] classify_and_stage: intent CONVERSATION, rien à stager");
         return;
     }
 
-    // Toast unique avant les POSTs
-    let toast = if actionable.len() == 1 {
-        if actionable[0].0 == "TACHE" { "📋 tâche".to_string() } else { "💡 noté".to_string() }
-    } else {
-        format!("💡 {} captures notées", actionable.len())
-    };
-    let _ = app.emit("claude-capture", toast);
-
-    // Stage chaque item séparément
-    for (intent, content) in &actionable {
-        let (endpoint, payload) = if intent.as_str() == "TACHE" {
-            ("/task",  serde_json::json!({"content": content}))
-        } else {
-            ("/stage", serde_json::json!({"content": content, "hint": intent}))
+    // ── Traite chaque DELETE_STAGING ──────────────────────────────────────────
+    if !deletes.is_empty() {
+        let mut n_ok = 0usize;
+        let mut last_deleted = String::new();
+        for (_, query) in &deletes {
+            eprintln!("[jarvis] classify_and_stage: DELETE_STAGING query={query:?}");
+            match http_client()
+                .post(format!("{companion_url}/delete_staging_by_content"))
+                .json(&serde_json::json!({"query": query}))
+                .send()
+                .await
+            {
+                Ok(resp) if resp.status().is_success() => {
+                    match resp.json::<serde_json::Value>().await {
+                        Ok(body) if body["ok"] == true => {
+                            n_ok += 1;
+                            last_deleted = body["deleted"].as_str().unwrap_or("?").to_string();
+                            eprintln!("[jarvis] DELETE_STAGING ok — supprimé: {last_deleted:?}");
+                        }
+                        Ok(_)  => eprintln!("[jarvis] DELETE_STAGING ok=false — non trouvé"),
+                        Err(e) => eprintln!("[jarvis] DELETE_STAGING parse error: {e}"),
+                    }
+                }
+                Ok(resp) => eprintln!("[jarvis] DELETE_STAGING HTTP {}", resp.status()),
+                Err(e)   => eprintln!("[jarvis] DELETE_STAGING companion down: {e}"),
+            }
+        }
+        let toast = match n_ok {
+            0 => "❌ non trouvé".to_string(),
+            1 => format!("🗑 supprimé : {last_deleted}"),
+            n => format!("🗑 {} suppressions", n),
         };
+        let _ = app.emit("claude-capture", toast);
+    }
 
-        eprintln!("[jarvis] classify_and_stage: POST {companion_url}{endpoint} — {intent:?}");
-        let http_result = http_client()
-            .post(format!("{companion_url}{endpoint}"))
-            .json(&payload)
-            .send()
-            .await;
+    // ── Stage chaque capture/tâche ────────────────────────────────────────────
+    if !captures.is_empty() {
+        let toast = if captures.len() == 1 {
+            if captures[0].0 == "TACHE" { "📋 tâche".to_string() } else { "💡 noté".to_string() }
+        } else {
+            format!("💡 {} captures notées", captures.len())
+        };
+        let _ = app.emit("claude-capture", toast);
 
-        match http_result {
-            Ok(r) if r.status().is_success() => {
-                eprintln!("[jarvis] classify_and_stage: companion OK ({} {})", r.status(), endpoint);
-            }
-            Ok(r) => {
-                eprintln!("[jarvis] classify_and_stage: companion erreur HTTP {} — fallback", r.status());
-                fallback_stage(content, intent);
-            }
-            Err(e) => {
-                eprintln!("[jarvis] classify_and_stage: companion down ({e}) — fallback [{intent}]");
-                fallback_stage(content, intent);
+        for (intent, content) in &captures {
+            let (endpoint, payload) = if intent.as_str() == "TACHE" {
+                ("/task",  serde_json::json!({"content": content}))
+            } else {
+                ("/stage", serde_json::json!({"content": content, "hint": intent}))
+            };
+
+            eprintln!("[jarvis] classify_and_stage: POST {companion_url}{endpoint} — {intent:?}");
+            let http_result = http_client()
+                .post(format!("{companion_url}{endpoint}"))
+                .json(&payload)
+                .send()
+                .await;
+
+            match http_result {
+                Ok(r) if r.status().is_success() => {
+                    eprintln!("[jarvis] classify_and_stage: companion OK ({} {})", r.status(), endpoint);
+                }
+                Ok(r) => {
+                    eprintln!("[jarvis] classify_and_stage: companion erreur HTTP {} — fallback", r.status());
+                    fallback_stage(content, intent);
+                }
+                Err(e) => {
+                    eprintln!("[jarvis] classify_and_stage: companion down ({e}) — fallback [{intent}]");
+                    fallback_stage(content, intent);
+                }
             }
         }
     }
