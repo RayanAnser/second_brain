@@ -80,6 +80,8 @@ export function useGeminiLive() {
 
   // ── TTS refs ────────────────────────────────────────────────────────────────
   const ttsCtxRef          = useRef<AudioContext | null>(null);
+  const ttsAnalyserRef     = useRef<AnalyserNode | null>(null);
+  const ttsRafRef          = useRef<number>(0);
   const sourcesRef         = useRef<AudioBufferSourceNode[]>([]);
   const playbackEndTimeRef = useRef<number>(0);
   const scheduleChainRef   = useRef<Promise<void>>(Promise.resolve());
@@ -92,6 +94,9 @@ export function useGeminiLive() {
 
   // ── TTS ─────────────────────────────────────────────────────────────────────
   const cancelTTS = useCallback(() => {
+    cancelAnimationFrame(ttsRafRef.current);
+    setAudioLevel(0);
+    ttsAnalyserRef.current = null;
     const ctx = ttsCtxRef.current;
     ttsCtxRef.current = null;
     scheduleChainRef.current = Promise.resolve();
@@ -99,7 +104,7 @@ export function useGeminiLive() {
     sourcesRef.current = [];
     if (ctx) ctx.close();
     setIsSpeaking(false);
-  }, [setIsSpeaking]);
+  }, [setIsSpeaking, setAudioLevel]);
 
   const speakSentence = useCallback((sentence: string) => {
     const clean = stripMarkdown(sentence).trim();
@@ -112,11 +117,30 @@ export function useGeminiLive() {
     if (!ttsCtxRef.current) {
       const ctx = new AudioContext();
       console.log("[jarvis] speakSentence: AudioContext créé — state:", ctx.state);
+
+      // Wire analyser: each source → analyser → destination
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.connect(ctx.destination);
+      ttsAnalyserRef.current = analyser;
+
       ttsCtxRef.current = ctx;
       sourcesRef.current = [];
       playbackEndTimeRef.current = ctx.currentTime;
       scheduleChainRef.current = Promise.resolve();
       setIsSpeaking(true);
+
+      // Level metering loop — reads analyser each rAF, writes to store audioLevel
+      const freqData = new Uint8Array(analyser.frequencyBinCount);
+      const meterLoop = () => {
+        if (ttsCtxRef.current !== ctx) { setAudioLevel(0); return; }
+        analyser.getByteFrequencyData(freqData);
+        let sum = 0;
+        for (let i = 0; i < freqData.length; i++) sum += freqData[i];
+        setAudioLevel(sum / freqData.length / 255);
+        ttsRafRef.current = requestAnimationFrame(meterLoop);
+      };
+      ttsRafRef.current = requestAnimationFrame(meterLoop);
     }
 
     const audioCtx = ttsCtxRef.current;
@@ -143,7 +167,8 @@ export function useGeminiLive() {
         console.log("[jarvis] speakSentence: audio décodé — duration:", buffer.duration.toFixed(2), "s, sampleRate:", buffer.sampleRate);
         const source = audioCtx.createBufferSource();
         source.buffer = buffer;
-        source.connect(audioCtx.destination);
+        // Route through analyser so the meter loop picks up the signal
+        source.connect(ttsAnalyserRef.current ?? audioCtx.destination);
         sourcesRef.current.push(source);
         const startAt = Math.max(audioCtx.currentTime, playbackEndTimeRef.current);
         source.start(startAt);
@@ -153,7 +178,7 @@ export function useGeminiLive() {
         console.error("[jarvis] speakSentence: ERREUR —", err);
       }
     });
-  }, [setIsSpeaking]);
+  }, [setIsSpeaking, setAudioLevel]);
 
   const finishSpeaking = useCallback(() => {
     const audioCtx = ttsCtxRef.current;
@@ -165,6 +190,9 @@ export function useGeminiLive() {
       const sources = sourcesRef.current;
       const cleanup = () => {
         if (ttsCtxRef.current === audioCtx) {
+          cancelAnimationFrame(ttsRafRef.current);
+          setAudioLevel(0);
+          ttsAnalyserRef.current = null;
           setIsSpeaking(false);
           audioCtx.close();
           ttsCtxRef.current = null;
@@ -176,7 +204,7 @@ export function useGeminiLive() {
       }
       sources[sources.length - 1].onended = cleanup;
     });
-  }, [setIsSpeaking]);
+  }, [setIsSpeaking, setAudioLevel]);
 
   // TTS event listeners (stable — deps are zustand setters)
   useEffect(() => {
@@ -274,9 +302,6 @@ export function useGeminiLive() {
           ? buildSystemPrompt(memoryContext.soul, memoryContext.user, memoryContext.memory)
           : "Tu es un assistant personnel. Réponds en français.";
 
-        // Réinitialiser la position de lecture avant chaque nouveau tour.
-        // Sans ça, playbackEndTimeRef accumule entre les tours si onended
-        // ne s'est pas déclenché (AudioContext réutilisé).
         playbackEndTimeRef.current = 0;
         sourcesRef.current = [];
         scheduleChainRef.current = Promise.resolve();
