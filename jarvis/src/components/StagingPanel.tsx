@@ -13,23 +13,15 @@ const INTENT_LABEL: Record<string, string> = {
 export function StagingPanel() {
   const { captures, setCaptures } = useStore();
 
+  const loadCaptures = () =>
+    invoke<Capture[]>("fetch_staging")
+      .then(setCaptures)
+      .catch((e) => console.error("[jarvis] fetch_staging erreur:", e));
+
   useEffect(() => {
-    console.log("[jarvis] StagingPanel: monté, polling démarré");
-    const load = () => {
-      console.log("[jarvis] StagingPanel: read_staging...");
-      invoke<Capture[]>("read_staging")
-        .then((data) => {
-          console.log("[jarvis] StagingPanel: read_staging →", data);
-          setCaptures(data);
-        })
-        .catch((e) => console.error("[jarvis] StagingPanel: read_staging erreur:", e));
-    };
-    load();
-    const id = setInterval(load, 5000);
-    return () => {
-      console.log("[jarvis] StagingPanel: démonté, polling arrêté");
-      clearInterval(id);
-    };
+    loadCaptures();
+    const id = setInterval(loadCaptures, 5000);
+    return () => clearInterval(id);
   }, []);
 
   if (captures.length === 0) {
@@ -41,8 +33,8 @@ export function StagingPanel() {
   }
 
   const deleteCapture = (i: number) => {
-    invoke<Capture[]>("delete_staging", { index: i })
-      .then(setCaptures)
+    invoke("delete_staging", { index: i })
+      .then(() => loadCaptures())
       .catch((e) => console.error("[jarvis] delete_staging erreur:", e));
   };
 

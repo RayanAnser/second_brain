@@ -17,6 +17,7 @@ pub fn run() {
             commands::memory::read_memory_context,
             commands::memory::list_docs,
             commands::memory::read_doc,
+            commands::memory::fetch_staging,
             commands::memory::read_staging,
             commands::memory::delete_staging,
             commands::memory::debug_memory,

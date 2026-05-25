@@ -1089,6 +1089,31 @@ def _delete_staging_by_content(query: str) -> str | None:
     return None
 
 
+async def _http_get_staging(request):
+    captures = staged_captures.get(int(CHAT_ID), [])
+    result = [
+        {"intent": cap.get("hint", cap.get("intent", "?")), "content": cap.get("content", "")}
+        for cap in captures
+    ]
+    return aiohttp_web.json_response(result)
+
+
+async def _http_delete_staging_by_content(request):
+    try:
+        data  = await request.json()
+        query = str(data.get("query", "")).strip()
+        if not query:
+            return aiohttp_web.Response(status=400, text="query required")
+        deleted = _delete_staging_by_content(query)
+        if deleted:
+            log.info(f"[delete_staging_by_content] supprimé : {deleted!r}")
+            return aiohttp_web.json_response({"ok": True, "deleted": deleted})
+        return aiohttp_web.json_response({"ok": False, "deleted": None})
+    except Exception as e:
+        log.error(f"HTTP /delete_staging_by_content : {e}")
+        return aiohttp_web.Response(status=500, text=str(e))
+
+
 async def _http_delete_staging(request):
     try:
         data  = await request.json()
@@ -2055,9 +2080,11 @@ async def on_startup(app):
 
     if _AIOHTTP_AVAILABLE:
         _http_app = aiohttp_web.Application()
-        _http_app.router.add_post("/stage",          _http_stage)
-        _http_app.router.add_post("/task",           _http_task)
-        _http_app.router.add_post("/delete_staging", _http_delete_staging)
+        _http_app.router.add_get ("/staging",                    _http_get_staging)
+        _http_app.router.add_post("/stage",                     _http_stage)
+        _http_app.router.add_post("/task",                      _http_task)
+        _http_app.router.add_post("/delete_staging",            _http_delete_staging)
+        _http_app.router.add_post("/delete_staging_by_content", _http_delete_staging_by_content)
         runner = aiohttp_web.AppRunner(_http_app)
         await runner.setup()
         site = aiohttp_web.TCPSite(runner, "0.0.0.0", 8765)

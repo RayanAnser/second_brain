@@ -19,9 +19,16 @@ const VOCAL_INSTRUCTION: &str = "\n\nTu es en mode vocal. Réponds en 1-3 phrase
 
 const CLASSIFY_SYSTEM: &str = "\
 Classifie le message utilisateur. Retourne UNIQUEMENT du JSON valide, sans texte autour.\n\
-Intentions : CAPTURE_IDEE, CAPTURE_PROJET, CAPTURE_CONCEPT, CAPTURE_PERSO, TACHE, CONVERSATION.\n\
+Intentions : CAPTURE_IDEE, CAPTURE_PROJET, CAPTURE_CONCEPT, CAPTURE_PERSO, TACHE, DELETE_STAGING, CONVERSATION.\n\
+- DELETE_STAGING : supprimer une capture en attente (ex: \"supprime la capture X\", \"enlève X\", \"retire ça\").\n\
 Format strict : {\"intent\": \"...\", \"content\": \"version épurée, concise\"}\n\
+- Pour DELETE_STAGING, content = fragment de texte à chercher dans les captures.\n\
 En cas de doute : CONVERSATION.";
+
+fn is_speakable(s: &str) -> bool {
+    let t = s.trim();
+    !t.starts_with('{') && !t.starts_with('[') && !t.starts_with("```")
+}
 
 /// Returns the byte offset just past the first sentence-ending punctuation
 /// followed by a space or newline. Returns None if no boundary is found
@@ -119,9 +126,25 @@ async fn classify_and_stage(text: String, api_key: String, app: AppHandle) {
 
     let is_capture = matches!(intent, "CAPTURE_IDEE" | "CAPTURE_PROJET" | "CAPTURE_CONCEPT" | "CAPTURE_PERSO");
     let is_tache   = intent == "TACHE";
+    let is_delete  = intent == "DELETE_STAGING";
 
-    if !is_capture && !is_tache {
+    if !is_capture && !is_tache && !is_delete {
         eprintln!("[jarvis] classify_and_stage: intent CONVERSATION, rien à stager");
+        return;
+    }
+
+    let companion_url = std::env::var("COMPANION_URL")
+        .unwrap_or_else(|_| "http://localhost:8765".to_string());
+
+    if is_delete {
+        let _ = app.emit("claude-capture", "🗑 supprimé");
+        let payload = serde_json::json!({"query": content});
+        eprintln!("[jarvis] classify_and_stage: DELETE_STAGING query={:?}", content);
+        let _ = http_client()
+            .post(format!("{companion_url}/delete_staging_by_content"))
+            .json(&payload)
+            .send()
+            .await;
         return;
     }
 
@@ -135,8 +158,6 @@ async fn classify_and_stage(text: String, api_key: String, app: AppHandle) {
         ("/stage", serde_json::json!({"content": content, "hint": intent}))
     };
 
-    let companion_url = std::env::var("COMPANION_URL")
-        .unwrap_or_else(|_| "http://localhost:8765".to_string());
     eprintln!("[jarvis] classify_and_stage: POST {companion_url}{endpoint}");
     let http_result = http_client()
         .post(format!("{companion_url}{endpoint}"))
@@ -228,7 +249,7 @@ pub async fn ask_claude(
                     while let Some(boundary) = find_sentence_end(&sentence_buf) {
                         let sentence = sentence_buf[..boundary].trim().to_string();
                         sentence_buf = sentence_buf[boundary..].trim_start().to_string();
-                        if sentence.len() > 3 {
+                        if sentence.len() > 3 && is_speakable(&sentence) {
                             app.emit("claude-sentence", sentence).map_err(|e| e.to_string())?;
                         }
                     }
@@ -239,7 +260,7 @@ pub async fn ask_claude(
                 // Flush whatever remains — no length filter here, short finals like
                 // "Ok!" or "Non." are valid and must be spoken.
                 let remaining = sentence_buf.trim().to_string();
-                if !remaining.is_empty() {
+                if !remaining.is_empty() && is_speakable(&remaining) {
                     app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
                 }
                 app.emit("claude-done", ()).map_err(|e| e.to_string())?;
@@ -252,7 +273,7 @@ pub async fn ask_claude(
 
     // Fallback flush if stream ended without message_stop
     let remaining = sentence_buf.trim().to_string();
-    if !remaining.is_empty() {
+    if !remaining.is_empty() && is_speakable(&remaining) {
         app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
     }
     app.emit("claude-done", ()).map_err(|e| e.to_string())?;

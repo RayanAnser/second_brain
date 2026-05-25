@@ -147,6 +147,29 @@ fn captures_from_json(json: &serde_json::Value) -> Vec<Capture> {
     captures
 }
 
+/// Fetches the authoritative capture list from companion RAM.
+/// Falls back to reading staging.json if companion is unreachable.
+#[tauri::command]
+pub async fn fetch_staging() -> Vec<Capture> {
+    let companion_url = std::env::var("COMPANION_URL")
+        .unwrap_or_else(|_| "http://localhost:8765".to_string());
+
+    if let Ok(resp) = http_client()
+        .get(format!("{companion_url}/staging"))
+        .send()
+        .await
+    {
+        if resp.status().is_success() {
+            if let Ok(captures) = resp.json::<Vec<Capture>>().await {
+                return captures;
+            }
+        }
+    }
+
+    // Companion down — read from disk
+    read_staging()
+}
+
 #[tauri::command]
 pub fn read_staging() -> Vec<Capture> {
     let path    = memory_dir().join("staging.json");
