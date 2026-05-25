@@ -17,6 +17,12 @@ pub struct ChatMessage {
 
 const VOCAL_INSTRUCTION: &str = "\n\nTu es en mode vocal. Réponds en 1-3 phrases maximum, de façon naturelle et conversationnelle. Pas de listes, pas de markdown.";
 
+const CLASSIFY_SYSTEM: &str = "\
+Classifie le message utilisateur. Retourne UNIQUEMENT du JSON valide, sans texte autour.\n\
+Intentions : CAPTURE_IDEE, CAPTURE_PROJET, CAPTURE_CONCEPT, CAPTURE_PERSO, TACHE, CONVERSATION.\n\
+Format strict : {\"intent\": \"...\", \"content\": \"version épurée, concise\"}\n\
+En cas de doute : CONVERSATION.";
+
 /// Returns the byte offset just past the first sentence-ending punctuation
 /// followed by a space or newline. Returns None if no boundary is found
 /// (including when punctuation is at end of buffer — wait for more tokens).
@@ -33,6 +39,105 @@ fn find_sentence_end(s: &str) -> Option<usize> {
     None
 }
 
+fn fallback_stage(content: &str, hint: &str) {
+    let memory_dir = std::env::var("MEMORY_DIR").unwrap_or_else(|_| "./memory".to_string());
+    let staging_path = std::path::PathBuf::from(&memory_dir).join("staging.json");
+    let chat_id = std::env::var("TELEGRAM_CHAT_ID").unwrap_or_else(|_| "0".to_string());
+    let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M").to_string();
+
+    let text = std::fs::read_to_string(&staging_path).unwrap_or_else(|_| "{}".to_string());
+    let mut data: serde_json::Value = serde_json::from_str(&text).unwrap_or(serde_json::json!({}));
+
+    let entry = serde_json::json!({"content": content, "hint": hint, "timestamp": timestamp});
+    if let Some(obj) = data.as_object_mut() {
+        let arr = obj.entry(chat_id).or_insert_with(|| serde_json::json!([]));
+        if let Some(arr) = arr.as_array_mut() {
+            arr.push(entry);
+        }
+    }
+
+    if let Ok(serialized) = serde_json::to_string_pretty(&data) {
+        let _ = std::fs::write(&staging_path, serialized);
+    }
+}
+
+async fn classify_and_stage(text: String, api_key: String, app: AppHandle) {
+    if text.is_empty() {
+        return;
+    }
+
+    let body = serde_json::json!({
+        "model":      "claude-haiku-4-5-20251001",
+        "max_tokens": 150,
+        "system": [{"type": "text", "text": CLASSIFY_SYSTEM, "cache_control": {"type": "ephemeral"}}],
+        "messages": [{"role": "user", "content": &text}],
+    });
+
+    let resp = match http_client()
+        .post("https://api.anthropic.com/v1/messages")
+        .header("x-api-key",         &api_key)
+        .header("anthropic-version", "2023-06-01")
+        .header("content-type",      "application/json")
+        .json(&body)
+        .send()
+        .await
+    {
+        Ok(r)  => r,
+        Err(e) => { eprintln!("[jarvis] classify_and_stage: request failed: {e}"); return; }
+    };
+
+    let json: serde_json::Value = match resp.json().await {
+        Ok(j)  => j,
+        Err(e) => { eprintln!("[jarvis] classify_and_stage: parse failed: {e}"); return; }
+    };
+
+    let raw = match json
+        .get("content").and_then(|c| c.get(0))
+        .and_then(|b| b.get("text")).and_then(|t| t.as_str())
+    {
+        Some(s) => s.to_string(),
+        None    => { eprintln!("[jarvis] classify_and_stage: unexpected response shape"); return; }
+    };
+
+    let classified: serde_json::Value = match serde_json::from_str(&raw) {
+        Ok(j)  => j,
+        Err(_) => return,
+    };
+
+    let intent  = classified.get("intent").and_then(|v| v.as_str()).unwrap_or("CONVERSATION");
+    let content = classified.get("content").and_then(|v| v.as_str()).unwrap_or(text.as_str());
+
+    let is_capture = matches!(intent, "CAPTURE_IDEE" | "CAPTURE_PROJET" | "CAPTURE_CONCEPT" | "CAPTURE_PERSO");
+    let is_tache   = intent == "TACHE";
+
+    if !is_capture && !is_tache {
+        return;
+    }
+
+    // Toast immédiat — fire-and-forget, pas bloquant
+    let toast = if is_tache { "📋 tâche" } else { "💡 noté" };
+    let _ = app.emit("claude-capture", toast);
+
+    let (endpoint, payload) = if is_tache {
+        ("/task",  serde_json::json!({"content": content}))
+    } else {
+        ("/stage", serde_json::json!({"content": content, "hint": intent}))
+    };
+
+    let http_ok = http_client()
+        .post(format!("http://localhost:8765{endpoint}"))
+        .json(&payload)
+        .send()
+        .await
+        .map(|r| r.status().is_success())
+        .unwrap_or(false);
+
+    if !http_ok {
+        eprintln!("[jarvis] classify_and_stage: companion down — fallback staging.json [{intent}]");
+        fallback_stage(content, intent);
+    }
+}
+
 #[tauri::command]
 pub async fn ask_claude(
     app:           AppHandle,
@@ -41,6 +146,8 @@ pub async fn ask_claude(
 ) -> Result<(), String> {
     let api_key = std::env::var("ANTHROPIC_API_KEY")
         .map_err(|_| "ANTHROPIC_API_KEY non défini".to_string())?;
+
+    let user_text = messages.last().map(|m| m.content.clone()).unwrap_or_default();
 
     let vocal_system = format!("{}{}", system_prompt, VOCAL_INSTRUCTION);
 
@@ -115,6 +222,7 @@ pub async fn ask_claude(
                     app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
                 }
                 app.emit("claude-done", ()).map_err(|e| e.to_string())?;
+                tokio::spawn(classify_and_stage(user_text.clone(), api_key.clone(), app.clone()));
                 return Ok(());
             }
         }
@@ -126,5 +234,6 @@ pub async fn ask_claude(
         app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
     }
     app.emit("claude-done", ()).map_err(|e| e.to_string())?;
+    tokio::spawn(classify_and_stage(user_text, api_key, app));
     Ok(())
 }

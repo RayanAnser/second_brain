@@ -41,6 +41,12 @@ try:
 except ImportError:
     _RAG_AVAILABLE = False
 
+try:
+    from aiohttp import web as aiohttp_web
+    _AIOHTTP_AVAILABLE = True
+except ImportError:
+    _AIOHTTP_AVAILABLE = False
+
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -1055,6 +1061,35 @@ def _build_rag_injection(query: str) -> str:
     return f'<MEMORY_SEARCH query="{query}">\n{formatted}\n</MEMORY_SEARCH>'
 
 
+# ── HTTP companion server ─────────────────────────────────────────────────────
+
+async def _http_stage(request):
+    try:
+        data    = await request.json()
+        content = str(data.get("content", "")).strip()
+        hint    = str(data.get("hint", "CAPTURE_IDEE"))
+        if not content:
+            return aiohttp_web.Response(status=400, text="content required")
+        stage_capture(int(CHAT_ID), content, hint)
+        return aiohttp_web.json_response({"ok": True})
+    except Exception as e:
+        log.error(f"HTTP /stage : {e}")
+        return aiohttp_web.Response(status=500, text=str(e))
+
+
+async def _http_task(request):
+    try:
+        data    = await request.json()
+        content = str(data.get("content", "")).strip()
+        if not content:
+            return aiohttp_web.Response(status=400, text="content required")
+        _dispatch_tache(content)
+        return aiohttp_web.json_response({"ok": True})
+    except Exception as e:
+        log.error(f"HTTP /task : {e}")
+        return aiohttp_web.Response(status=500, text=str(e))
+
+
 # ── Claude conversation ──────────────────────────────────────────────────────
 
 async def ask_claude(
@@ -1943,6 +1978,18 @@ async def on_startup(app):
             )
         except Exception as e:
             log.error(f"Notification staging au démarrage : {e}")
+
+    if _AIOHTTP_AVAILABLE:
+        _http_app = aiohttp_web.Application()
+        _http_app.router.add_post("/stage", _http_stage)
+        _http_app.router.add_post("/task",  _http_task)
+        runner = aiohttp_web.AppRunner(_http_app)
+        await runner.setup()
+        site = aiohttp_web.TCPSite(runner, "127.0.0.1", 8765)
+        await site.start()
+        log.info("HTTP companion server démarré sur localhost:8765")
+    else:
+        log.warning("aiohttp non disponible — serveur HTTP Jarvis désactivé (pip install aiohttp)")
 
 
 def main():

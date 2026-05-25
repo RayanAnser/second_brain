@@ -1,5 +1,6 @@
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { ConversationArea } from "./components/ConversationArea";
 import { Sidebar } from "./components/Sidebar";
 import { useStore } from "./store";
@@ -7,10 +8,21 @@ import type { MemoryContext } from "./types";
 
 export default function App() {
   const { setMemoryContext } = useStore();
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     invoke("debug_memory").then((info) => console.log("[jarvis] debug_memory:", info)).catch(console.error);
     invoke<MemoryContext>("read_memory_context").then(setMemoryContext).catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<string>("claude-capture", (e) => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+      setToast(e.payload);
+      toastTimer.current = setTimeout(() => setToast(null), 2000);
+    });
+    return () => { unlisten.then((fn) => fn()); };
   }, []);
 
   return (
@@ -33,6 +45,13 @@ export default function App() {
           <ConversationArea />
         </main>
       </div>
+
+      {/* Capture toast */}
+      {toast && (
+        <div className="fixed bottom-4 right-4 z-50 bg-surface border border-border rounded px-3 py-1.5 text-xs text-muted font-mono pointer-events-none">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
