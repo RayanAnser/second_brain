@@ -40,14 +40,28 @@ export function StagingPanel() {
     );
   }
 
+  const deleteCapture = (i: number) => {
+    invoke<Capture[]>("delete_staging", { index: i })
+      .then(setCaptures)
+      .catch((e) => console.error("[jarvis] delete_staging erreur:", e));
+  };
+
   return (
     <div className="space-y-2">
       {captures.map((c, i) => (
-        <div key={i} className="border border-border rounded-md p-2.5">
-          <span className="text-[10px] font-medium text-primary">
-            {INTENT_LABEL[c.intent] ?? c.intent}
-          </span>
-          <p className="text-xs text-[#e0e0f0] mt-1 leading-relaxed">{c.content}</p>
+        <div key={i} className="border border-border rounded-md p-2.5 flex items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-medium text-primary">
+              {INTENT_LABEL[c.intent] ?? c.intent}
+            </span>
+            <p className="text-xs text-[#e0e0f0] mt-1 leading-relaxed">{c.content}</p>
+          </div>
+          <button
+            onClick={() => deleteCapture(i)}
+            className="text-muted hover:text-red-400 text-xs leading-none flex-shrink-0 mt-0.5"
+          >
+            ✕
+          </button>
         </div>
       ))}
     </div>

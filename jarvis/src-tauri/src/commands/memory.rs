@@ -122,25 +122,63 @@ pub fn read_doc(rel_key: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
-pub fn read_staging() -> Vec<Capture> {
-    let path    = memory_dir().join("staging.json");
-    let content = fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
-    let json: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
-
+fn captures_from_json(json: &serde_json::Value) -> Vec<Capture> {
     let mut captures = Vec::new();
     if let Some(obj) = json.as_object() {
         for list in obj.values() {
             if let Some(arr) = list.as_array() {
                 for item in arr {
                     captures.push(Capture {
-                        intent:  item.get("intent").and_then(|v| v.as_str()).unwrap_or("?").to_string(),
+                        intent:  item.get("hint").or_else(|| item.get("intent"))
+                                     .and_then(|v| v.as_str()).unwrap_or("?").to_string(),
                         content: item.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                     });
                 }
             }
         }
     }
-
     captures
+}
+
+#[tauri::command]
+pub fn read_staging() -> Vec<Capture> {
+    let path    = memory_dir().join("staging.json");
+    let content = fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
+    let json: serde_json::Value = serde_json::from_str(&content).unwrap_or_default();
+    captures_from_json(&json)
+}
+
+#[tauri::command]
+pub fn delete_staging(index: usize) -> Result<Vec<Capture>, String> {
+    let path    = memory_dir().join("staging.json");
+    let content = fs::read_to_string(&path).unwrap_or_else(|_| "{}".to_string());
+    let mut json: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+
+    {
+        let obj = json.as_object_mut().ok_or("staging.json invalide")?;
+        let mut flat_idx = 0usize;
+        let mut found    = false;
+
+        'outer: for list in obj.values_mut() {
+            if let Some(arr) = list.as_array_mut() {
+                for i in 0..arr.len() {
+                    if flat_idx == index {
+                        arr.remove(i);
+                        found = true;
+                        break 'outer;
+                    }
+                    flat_idx += 1;
+                }
+            }
+        }
+
+        if !found {
+            return Err(format!("Index {} hors limites", index));
+        }
+    }
+
+    let updated = serde_json::to_string_pretty(&json).map_err(|e| e.to_string())?;
+    fs::write(&path, updated).map_err(|e| e.to_string())?;
+
+    Ok(captures_from_json(&json))
 }

@@ -18,6 +18,7 @@ pub fn run() {
             commands::memory::list_docs,
             commands::memory::read_doc,
             commands::memory::read_staging,
+            commands::memory::delete_staging,
             commands::memory::debug_memory,
             commands::groq::transcribe_audio,
             commands::claude::ask_claude,

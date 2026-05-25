@@ -437,6 +437,7 @@ async def _research_task(slug: str, query: str, chat_id: int, bot):
 
 
 def stage_capture(user_id: int, content: str, hint: str):
+    log.info(f"[stage_capture] user_id={user_id} staged_keys={list(staged_captures.keys())}")
     entry = {
         "content": content,
         "hint": hint,
@@ -1284,7 +1285,8 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_command_save(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """/save — analyse intelligente et demande validation avant écriture."""
-    user_id = update.effective_user.id
+    user_id = int(CHAT_ID)
+    log.info(f"[handle_command_save] user_id={user_id} staged_keys={list(staged_captures.keys())}")
 
     if not conversations.get(user_id) and not staged_captures.get(user_id):
         await update.message.reply_text("Rien à sauvegarder.")
@@ -1321,7 +1323,7 @@ async def handle_command_save(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def handle_memory_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Boutons de validation mémoire."""
     query = update.callback_query
-    user_id = query.from_user.id
+    user_id = int(CHAT_ID)
     await query.answer()
 
     if query.data == "mem_save":
