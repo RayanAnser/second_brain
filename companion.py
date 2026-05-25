@@ -83,6 +83,8 @@ TELEGRAM_TOKEN  = os.environ["TELEGRAM_TOKEN"]
 ANTHROPIC_KEY   = os.environ["ANTHROPIC_API_KEY"]
 GROQ_KEY        = os.environ["GROQ_API_KEY"]
 CHAT_ID         = os.environ["TELEGRAM_CHAT_ID"]
+if not CHAT_ID or int(CHAT_ID) == 0:
+    raise ValueError("TELEGRAM_CHAT_ID doit être non-nul — vérifier le .env")
 MEMORY_DIR      = Path(os.environ.get("MEMORY_DIR", "./memory"))
 GITHUB_TOKEN    = os.environ.get("GITHUB_TOKEN")
 GITHUB_REPO     = os.environ.get("GITHUB_REPO")   # "owner/repo"
@@ -1123,7 +1125,9 @@ async def _http_stage(request):
         hint    = str(data.get("hint", "CAPTURE_IDEE"))
         if not content:
             return aiohttp_web.Response(status=400, text="content required")
-        stage_capture(int(CHAT_ID), content, hint)
+        uid = int(CHAT_ID)
+        log.info(f"[_http_stage] user_id={uid} hint={hint!r} content={content[:60]!r}")
+        stage_capture(uid, content, hint)
         return aiohttp_web.json_response({"ok": True})
     except Exception as e:
         log.error(f"HTTP /stage : {e}")
