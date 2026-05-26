@@ -6,10 +6,13 @@
   box-sizing: border-box;
 }
 
+html, body, #root {
+  background: transparent !important;
+}
+
 body {
   margin: 0;
   font-family: "Inter", system-ui, sans-serif;
-  background: #0a0a0f;
   color: #e0e0f0;
   overflow: hidden;
   user-select: none;
@@ -27,4 +30,9 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #3a3a5e;
+}
+
+@keyframes orb-text-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to   { opacity: 1; transform: translateY(0); }
 }

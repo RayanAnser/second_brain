@@ -269,7 +269,30 @@ pub async fn ask_claude(
 
     let user_text = messages.last().map(|m| m.content.clone()).unwrap_or_default();
 
-    let vocal_system = format!("{}{}", system_prompt, VOCAL_INSTRUCTION);
+    // RAG injection — query memory_archive via the companion HTTP server (best-effort, 500ms timeout)
+    let companion_url = std::env::var("COMPANION_URL")
+        .unwrap_or_else(|_| "http://localhost:8765".to_string());
+    let rag_block = match http_client()
+        .post(format!("{}/rag_search", companion_url))
+        .json(&serde_json::json!({"query": user_text}))
+        .timeout(std::time::Duration::from_millis(500))
+        .send()
+        .await
+    {
+        Ok(resp) => match resp.json::<serde_json::Value>().await {
+            Ok(json) => json
+                .get("result")
+                .and_then(|r| r.as_str())
+                .filter(|s| !s.is_empty())
+                .map(|s| format!("\n\n<MEMORY_CONTEXT>\n{}\n</MEMORY_CONTEXT>", s))
+                .unwrap_or_default(),
+            Err(_) => String::new(),
+        },
+        Err(_) => String::new(),
+    };
+
+    let vocal_system = format!("{}{}{}", system_prompt, rag_block, VOCAL_INSTRUCTION);
+    eprintln!("[timing] system_prompt_len: {} chars (rag: {} chars)", vocal_system.len(), rag_block.len());
 
     let system_blocks = serde_json::json!([{
         "type": "text",
@@ -285,6 +308,8 @@ pub async fn ask_claude(
         "messages":   messages,
     });
 
+    let t1 = std::time::Instant::now();
+
     let response = http_client()
         .post("https://api.anthropic.com/v1/messages")
         .header("x-api-key",          &api_key)
@@ -295,6 +320,8 @@ pub async fn ask_claude(
         .await
         .map_err(|e| e.to_string())?;
 
+    eprintln!("[timing] ask_claude: HTTP response headers: {}ms", t1.elapsed().as_millis());
+
     if !response.status().is_success() {
         let err = response.text().await.unwrap_or_default();
         return Err(format!("Erreur API Anthropic : {}", err));
@@ -302,6 +329,7 @@ pub async fn ask_claude(
 
     let mut stream = response.bytes_stream();
     let mut sentence_buf = String::new();
+    let mut first_sentence = true;
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| e.to_string())?;
@@ -328,6 +356,10 @@ pub async fn ask_claude(
                         let sentence = sentence_buf[..boundary].trim().to_string();
                         sentence_buf = sentence_buf[boundary..].trim_start().to_string();
                         if sentence.len() > 3 && is_speakable(&sentence) {
+                            if first_sentence {
+                                eprintln!("[timing] claude-ttft: {}ms", t1.elapsed().as_millis());
+                                first_sentence = false;
+                            }
                             app.emit("claude-sentence", sentence).map_err(|e| e.to_string())?;
                         }
                     }
@@ -352,6 +384,9 @@ pub async fn ask_claude(
     // Fallback flush if stream ended without message_stop
     let remaining = sentence_buf.trim().to_string();
     if !remaining.is_empty() && is_speakable(&remaining) {
+        if first_sentence {
+            eprintln!("[timing] claude-ttft: {}ms", t1.elapsed().as_millis());
+        }
         app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
     }
     app.emit("claude-done", ()).map_err(|e| e.to_string())?;

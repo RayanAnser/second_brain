@@ -15,6 +15,9 @@ interface AppState {
   setIsThinking: (v: boolean) => void;
   setAudioLevel: (v: number) => void;
 
+  isCompact: boolean;
+  setIsCompact: (v: boolean) => void;
+
   memoryContext: MemoryContext | null;
   setMemoryContext: (ctx: MemoryContext) => void;
 
@@ -50,6 +53,9 @@ export const useStore = create<AppState>((set) => ({
   setIsSpeaking: (v) => set({ isSpeaking: v }),
   setIsThinking: (v) => set({ isThinking: v }),
   setAudioLevel: (v) => set({ audioLevel: v }),
+
+  isCompact: true,
+  setIsCompact: (v) => set({ isCompact: v }),
 
   memoryContext: null,
   setMemoryContext: (ctx) => set({ memoryContext: ctx }),

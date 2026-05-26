@@ -104,8 +104,10 @@ PERSO_DIR       = MEMORY_DIR / "perso"
 STAGING_FILE       = MEMORY_DIR / "staging.json"
 COMMANDS_MD        = MEMORY_DIR / "COMMANDS.md"
 AGENDA_MD          = MEMORY_DIR / "agenda.md"
-CONSOLIDATION_FILE = MEMORY_DIR / "last_consolidation.json"
-RAG_DB             = MEMORY_DIR / "embeddings" / "index.db"
+CONSOLIDATION_FILE  = MEMORY_DIR / "last_consolidation.json"
+RAG_DB              = MEMORY_DIR / "embeddings" / "index.db"
+MEMORY_ARCHIVE_MD   = MEMORY_DIR / "memory_archive.md"
+MEMORY_ACTIVE_MAX   = 6000
 
 # ── Clients ──────────────────────────────────────────────────────────────────
 claude = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
@@ -585,7 +587,40 @@ def execute_ops(ops: list) -> list[str]:
         except Exception as e:
             log.error(f"execute_ops : échec sur {op.get('path')} — {e}")
 
+    _archive_overflow()
     return modified
+
+
+def _archive_overflow() -> None:
+    if not MEMORY_MD.exists():
+        return
+    content = MEMORY_MD.read_text()
+    if len(content) <= MEMORY_ACTIVE_MAX:
+        return
+
+    paragraphs = content.split("\n\n")
+    to_archive: list[str] = []
+    remaining = paragraphs[:]
+
+    while len("\n\n".join(remaining)) > MEMORY_ACTIVE_MAX and len(remaining) > 1:
+        to_archive.append(remaining.pop(0))
+
+    if not to_archive:
+        return
+
+    archive_existing = MEMORY_ARCHIVE_MD.read_text() if MEMORY_ARCHIVE_MD.exists() else "# Archive mémoire\n"
+    archive_updated  = archive_existing.rstrip("\n") + "\n\n" + "\n\n".join(to_archive) + "\n"
+    MEMORY_ARCHIVE_MD.write_text(archive_updated)
+    _push_to_github(MEMORY_ARCHIVE_MD, archive_updated)
+
+    new_memory = "\n\n".join(remaining).rstrip("\n") + "\n"
+    MEMORY_MD.write_text(new_memory)
+    _push_to_github(MEMORY_MD, new_memory)
+    _invalidate_context_cache()
+    log.info(f"_archive_overflow: archivé {len(to_archive)} bloc(s) — memory.md {len(new_memory)} chars")
+
+    if _RAG_AVAILABLE and get_rag():
+        threading.Thread(target=get_rag().index_modified, daemon=True).start()
 
 
 def format_ops_plan(ops: list, summary: str) -> str:
@@ -1216,6 +1251,26 @@ async def _http_delete_staging(request):
     except Exception as e:
         log.error(f"HTTP /delete_staging : {e}")
         return aiohttp_web.Response(status=500, text=str(e))
+
+
+async def _http_rag_search(request):
+    try:
+        data  = await request.json()
+        query = str(data.get("query", "")).strip()
+    except Exception:
+        return aiohttp_web.Response(status=400, text="query required")
+    if not query or not _RAG_AVAILABLE:
+        return aiohttp_web.json_response({"result": ""})
+    rag = get_rag()
+    if rag is None:
+        return aiohttp_web.json_response({"result": ""})
+    try:
+        results   = rag.search(query, top_k=3)
+        formatted = format_search_results(results, MEMORY_DIR) if results else ""
+        return aiohttp_web.json_response({"result": formatted})
+    except Exception as e:
+        log.error(f"HTTP /rag_search : {e}")
+        return aiohttp_web.json_response({"result": ""})
 
 
 async def _http_stage(request):
@@ -1996,6 +2051,7 @@ def _run_heartbeat():
         message = _hb_format_message(analysis, freshness_days, freshness_label, today_agenda)
         _hb_send_telegram(message)
         log.info("Heartbeat : digest envoyé.")
+        threading.Thread(target=_consolidate_archive, daemon=True, name="archive-consolidation").start()
     except Exception as e:
         log.error(f"Heartbeat : erreur — {e}")
 
@@ -2126,6 +2182,37 @@ def _run_consolidation() -> None:
         log.info("Consolidation : état sauvegardé.")
 
 
+_ARCHIVE_CONSOLIDATION_SYSTEM = """\
+Tu consolides un fichier d'archive mémoire en français.
+Fusionne les entrées redondantes sur un même sujet, supprime les infos obsolètes, garde les faits durables.
+Conserve le format Markdown avec des sections claires.
+Retourne UNIQUEMENT le contenu consolidé, sans préambule ni conclusion."""
+
+
+def _consolidate_archive() -> None:
+    if not MEMORY_ARCHIVE_MD.exists():
+        return
+    content = MEMORY_ARCHIVE_MD.read_text()
+    if len(content) < 500:
+        return
+    try:
+        response = claude.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=4096,
+            system=_ARCHIVE_CONSOLIDATION_SYSTEM,
+            messages=[{"role": "user", "content": content}],
+        )
+        _log_api_call(response, "_consolidate_archive")
+        consolidated = response.content[0].text.strip()
+        MEMORY_ARCHIVE_MD.write_text(consolidated + "\n")
+        _push_to_github(MEMORY_ARCHIVE_MD, consolidated + "\n")
+        log.info(f"_consolidate_archive: {len(content)} → {len(consolidated)} chars")
+        if _RAG_AVAILABLE and get_rag():
+            threading.Thread(target=get_rag().index_modified, daemon=True).start()
+    except Exception as e:
+        log.error(f"_consolidate_archive: erreur — {e}")
+
+
 def _heartbeat_loop():
     last_fired_date: str | None = None
     last_consolidated_date: str | None = None
@@ -2164,6 +2251,7 @@ async def on_startup(app):
         _http_app.router.add_post("/task",                      _http_task)
         _http_app.router.add_post("/delete_staging",            _http_delete_staging)
         _http_app.router.add_post("/delete_staging_by_content", _http_delete_staging_by_content)
+        _http_app.router.add_post("/rag_search",                _http_rag_search)
         runner = aiohttp_web.AppRunner(_http_app)
         await runner.setup()
         site = aiohttp_web.TCPSite(runner, "0.0.0.0", 8765)
@@ -2175,6 +2263,9 @@ async def on_startup(app):
 
 def main():
     MEMORY_DIR.mkdir(parents=True, exist_ok=True)
+    if not MEMORY_ARCHIVE_MD.exists():
+        MEMORY_ARCHIVE_MD.write_text("# Archive mémoire\n")
+        log.info("memory_archive.md créé.")
     for path in [USER_MD, SOUL_MD, MEMORY_MD]:
         if not path.exists():
             log.warning(f"⚠️  Fichier manquant : {path}")

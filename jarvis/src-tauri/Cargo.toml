@@ -15,7 +15,8 @@ path = "src/main.rs"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri       = { version = "2" }
+tauri                        = { version = "2" }
+tauri-plugin-global-shortcut = "2"
 serde       = { version = "1", features = ["derive"] }
 serde_json  = "1"
 reqwest     = { version = "0.12", features = ["json", "multipart", "stream"] }
@@ -24,3 +25,10 @@ dotenvy      = "0.15"
 futures-util      = "0.3"
 chrono            = { version = "0.4", features = ["clock"] }
 base64 = "0.22"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_UI_Controls",
+] }

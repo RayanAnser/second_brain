@@ -1,13 +1,9 @@
 import { useState } from "react";
 import type { Message as MessageType } from "../types";
 
-export function Message({ role, content, timestamp }: MessageType) {
+export function Message({ role, content }: MessageType) {
   const [copied, setCopied] = useState(false);
-
-  const time = new Date(timestamp).toLocaleTimeString("fr-FR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const isUser = role === "user";
 
   const copy = () => {
     navigator.clipboard.writeText(content).then(() => {
@@ -16,27 +12,19 @@ export function Message({ role, content, timestamp }: MessageType) {
     });
   };
 
-  const isUser = role === "user";
-
   return (
-    <div className={`flex ${isUser ? "justify-end" : "justify-start"} mb-2`}>
-      <div
-        className={`group relative max-w-[80%] rounded-lg px-3.5 py-2.5 text-sm leading-relaxed
-          ${isUser
-            ? "bg-[#1a2a4a] text-[#e0e0f0] ml-10"
-            : "bg-panel border border-border text-[#e0e0f0] mr-10"
-          }`}
+    <div className={`group flex ${isUser ? "justify-end" : "justify-start"} mb-1.5`}>
+      <div className={`relative max-w-[88%] text-sm leading-relaxed
+        ${isUser ? "text-right text-white/90" : "text-left text-white/75"}`}
       >
         <p className="whitespace-pre-wrap">{content}</p>
-        <span className="text-[10px] text-muted mt-1 block text-right">{time}</span>
 
-        {/* Copy button — visible on group hover */}
         <button
           onClick={copy}
           aria-label="Copier"
-          className={`absolute -bottom-5 opacity-30 group-hover:opacity-100 transition-opacity
-            text-[10px] text-[#a0a0c0] hover:text-[#e0e0f0] leading-none select-none
-            ${isUser ? "right-1" : "left-1"}`}
+          className={`absolute -bottom-4 opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity
+            text-[10px] text-white/60 leading-none select-none pointer-events-auto
+            ${isUser ? "right-0" : "left-0"}`}
         >
           {copied ? "✓" : "⎘"}
         </button>

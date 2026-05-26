@@ -1,54 +1,50 @@
-import { useEffect, useRef } from "react";
 import { useStore } from "../store";
 import { Message } from "./Message";
-import { AudioVisualizer } from "./AudioVisualizer";
 import { PushToTalkButton } from "./PushToTalkButton";
-import { useClaudeStream } from "../hooks/useClaudeStream";
-import { useGeminiLive } from "../hooks/useGeminiLive";
 
-export function ConversationArea() {
-  useClaudeStream();
-  const { startListening, stopListening } = useGeminiLive();
+const BASE_OPACITIES = [0.3, 0.6, 1.0];
+
+interface Props {
+  startListening: () => void;
+  stopListening: () => void;
+}
+
+export function ConversationArea({ startListening, stopListening }: Props) {
   const { messages, isListening, isSpeaking, isThinking } = useStore();
-  const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  const lastThree = messages.slice(-3);
+  const opacities = BASE_OPACITIES.slice(BASE_OPACITIES.length - lastThree.length);
 
-  const statusText = isListening
-    ? "Écoute en cours..."
-    : isThinking
-    ? "Réflexion..."
-    : isSpeaking
-    ? "Lecture..."
-    : "Maintenez Espace ou cliquez pour parler";
+  const statusText = isListening ? "Écoute en cours..."
+                   : isThinking  ? "Réflexion..."
+                   : isSpeaking  ? "Lecture..."
+                   : "Espace ou clic pour parler";
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Message list */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        {messages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center text-muted">
-            <div className="text-4xl mb-4 opacity-20">◈</div>
-            <p className="text-sm">Aucune conversation active</p>
-            <p className="text-xs mt-1">Maintenez Espace ou cliquez sur le micro pour parler</p>
-          </div>
-        ) : (
-          <>
-            {messages.map((msg) => (
-              <Message key={msg.id} {...msg} />
-            ))}
-          </>
-        )}
-        <div ref={bottomRef} />
-      </div>
+    <div className="flex flex-col items-center px-4 pb-4 pointer-events-none">
+
+      {/* Message stream — last 3, fading upward */}
+      {lastThree.length > 0 && (
+        <div
+          className="w-full mb-3"
+          style={{ maskImage: "linear-gradient(to bottom, transparent 0%, black 40%)" }}
+        >
+          {lastThree.map((msg, i) => (
+            <div
+              key={msg.id}
+              style={{ opacity: opacities[i] }}
+              className="transition-opacity duration-500"
+            >
+              <Message {...msg} />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Controls */}
-      <div className="border-t border-border px-4 py-4 flex flex-col items-center gap-3 shrink-0">
-        <AudioVisualizer />
+      <div className="flex flex-col items-center gap-2 pointer-events-auto">
         <PushToTalkButton onStart={startListening} onStop={stopListening} />
-        <p className="text-[11px] text-muted">{statusText}</p>
+        <p className="text-[11px] text-white/30 select-none">{statusText}</p>
       </div>
     </div>
   );

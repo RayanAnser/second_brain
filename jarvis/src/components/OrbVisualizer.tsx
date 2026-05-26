@@ -19,7 +19,7 @@ interface StateTarget {
 // connectionDist reduced 20% vs original for fewer, more readable connections
 const T: Record<OrbState, StateTarget> = {
   idle: {
-    particleCount: 120, radius: 1.00, connectionDist: 0.42, pointSize: 2.5,
+    particleCount: 350, radius: 1.30, connectionDist: 0.42, pointSize: 3.75,
     rotationSpeed: 0.0003, coreScale: 1.0,
     colorParticle: new THREE.Color(0xa78bfa),
     colorLine:     new THREE.Color(0x6366f1),
@@ -49,8 +49,8 @@ const T: Record<OrbState, StateTarget> = {
 };
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const MAX_PARTICLES  = 250;
-const MAX_LINE_VERTS = 6000; // 3000 segments × 2 vertices
+const MAX_PARTICLES  = 400;
+const MAX_LINE_VERTS = 12000; // 6000 segments × 2 vertices
 
 // Pre-computed Fibonacci sphere directions — unit radius, y ∈ (-1, 1)
 const BASE_DIRS = (() => {
@@ -130,7 +130,7 @@ export function OrbVisualizer({
     // ── Scene / Camera ─────────────────────────────────────────────────────
     const scene  = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
-    camera.position.z = 3.5;
+    camera.position.z = 2.2;
 
     // ── Renderer ───────────────────────────────────────────────────────────
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -139,12 +139,13 @@ export function OrbVisualizer({
     renderer.setSize(W, H, false);
     renderer.setClearColor(0x000000, 0);
     Object.assign(renderer.domElement.style, {
-      display:  "block",
-      position: "absolute",
-      top:      "0",
-      left:     "0",
-      width:    "100%",
-      height:   "100%",
+      display:    "block",
+      position:   "absolute",
+      top:        "0",
+      left:       "0",
+      width:      "100%",
+      height:     "100%",
+      background: "transparent",
     });
     container.appendChild(renderer.domElement);
 
@@ -177,7 +178,7 @@ export function OrbVisualizer({
 
     const lineUniforms = {
       lineColor:   { value: T.idle.colorLine.clone() },
-      lineOpacity: { value: 0.42 },
+      lineOpacity: { value: 0.6 },
     };
     const lineMat  = new THREE.ShaderMaterial({
       vertexShader: LINE_VERT, fragmentShader: LINE_FRAG,
@@ -194,6 +195,25 @@ export function OrbVisualizer({
     const group = new THREE.Group();
     group.add(lineMesh, ptMesh, coreMesh);
     scene.add(group);
+
+    // ── Idle halo billboard (AdditiveBlending, always faces camera) ────────
+    const haloCanvas = document.createElement("canvas");
+    haloCanvas.width = 128; haloCanvas.height = 128;
+    const haloCtx = haloCanvas.getContext("2d")!;
+    const haloGrad = haloCtx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    haloGrad.addColorStop(0,    "rgba(99,102,241,1)");
+    haloGrad.addColorStop(0.45, "rgba(99,102,241,0.5)");
+    haloGrad.addColorStop(1,    "rgba(99,102,241,0)");
+    haloCtx.fillStyle = haloGrad;
+    haloCtx.fillRect(0, 0, 128, 128);
+    const haloTex = new THREE.CanvasTexture(haloCanvas);
+    const haloMat = new THREE.SpriteMaterial({
+      map: haloTex, blending: THREE.AdditiveBlending,
+      transparent: true, opacity: 0, depthWrite: false,
+    });
+    const haloSprite = new THREE.Sprite(haloMat);
+    haloSprite.scale.setScalar(4.0);
+    scene.add(haloSprite);
 
     // ── Lerped state (mutated each frame) ──────────────────────────────────
     const cur = {
@@ -290,7 +310,8 @@ export function OrbVisualizer({
       ptUniforms.ptSize.value = ptSize;
       ptUniforms.ptColor.value.copy(cur.colorParticle);
       lineUniforms.lineColor.value.copy(cur.colorLine);
-      lineUniforms.lineOpacity.value = Math.min(0.72, 0.42 + al * 0.3);
+      lineUniforms.lineOpacity.value = Math.min(1.0, 0.6 + al * 0.3);
+      haloMat.opacity = lerp(haloMat.opacity, stateRef.current === "idle" ? 0.4 : 0.0, 0.04);
       coreMat.color.copy(cur.colorCore);
       coreMesh.scale.setScalar(cur.coreScale);
 
@@ -310,12 +331,12 @@ export function OrbVisualizer({
       ptGeo.dispose();   ptMat.dispose();
       lineGeo.dispose(); lineMat.dispose();
       coreGeo.dispose(); coreMat.dispose();
+      haloTex.dispose(); haloMat.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
     };
   }, []);
 
-  // position: relative so the absolute canvas fills exactly this div
-  return <div ref={containerRef} className="w-full h-full relative" style={{ overflow: "visible" }} />;
+  return <div ref={containerRef} className="absolute inset-0" />;
 }
