@@ -7,6 +7,7 @@ export interface WidgetsContext {
   agenda:   AgendaItem[];
   projects: ProjectItem[];
   threads:  string[];
+  taches:   string[];
 }
 
 // ── Shared glass card ─────────────────────────────────────────────────────────
@@ -58,17 +59,20 @@ function statusColor(s: string): string {
 
 // ── Widgets ───────────────────────────────────────────────────────────────────
 export function ContextWidgets({ ctx }: { ctx: WidgetsContext }) {
-  // Fade-in on mount (opacity-0 → opacity-100 after first paint)
   const [show, setShow] = useState(false);
   const [threadsExpanded, setThreadsExpanded] = useState(false);
+  const [tachesExpanded, setTachesExpanded]   = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setShow(true), 80);
     return () => clearTimeout(t);
   }, []);
 
-  const PREVIEW = 3;
-  const extra   = ctx.threads.length - PREVIEW;
+  const PREVIEW     = 3;
+  const taches      = ctx.taches  ?? [];
+  const threads     = ctx.threads ?? [];
+  const extraTaches  = taches.length  - PREVIEW;
+  const extraThreads = threads.length - PREVIEW;
 
   return (
     <div
@@ -116,46 +120,87 @@ export function ContextWidgets({ ctx }: { ctx: WidgetsContext }) {
         </div>
       )}
 
-      {/* ── Fils ouverts — bottom-left, expands on hover ──────────────────── */}
-      {ctx.threads.length > 0 && (
-        <div
-          className="absolute bottom-32 left-3 z-10 w-52"
-          style={{ pointerEvents: "auto" }}
-        >
-          <GlassCard onHoverChange={setThreadsExpanded}>
-            <Header icon="◎" title="Fils ouverts" />
-            <div
-              className="px-3 pt-2 overflow-hidden transition-all duration-300 ease-out"
-              style={{
-                maxHeight: threadsExpanded
-                  ? `${ctx.threads.length * 20 + 20}px`
-                  : `${PREVIEW * 20 + 12}px`,
-              }}
-            >
-              {ctx.threads.map((t, i) => (
-                <p
-                  key={i}
-                  className="text-[11px] leading-snug truncate pb-1 transition-opacity duration-200"
-                  style={{
-                    color:   `rgba(255,255,255,${Math.max(0.3, 0.70 - i * 0.08)})`,
-                    opacity: i < PREVIEW || threadsExpanded ? 1 : 0,
-                  }}
-                >
-                  {t}
-                </p>
-              ))}
-            </div>
-            {extra > 0 && (
-              <p
-                className="px-3 pb-2 text-[9px] font-mono text-white/20 transition-opacity duration-200"
-                style={{ opacity: threadsExpanded ? 0 : 1 }}
+      {/* ── Tâches + Fils ouverts — bottom-left, stacked, grow upward ─────── */}
+      <div
+        className="absolute bottom-32 left-3 z-10 w-52 flex flex-col gap-2"
+        style={{ pointerEvents: "none" }}
+      >
+        {/* Tâches */}
+        {taches.length > 0 && (
+          <div style={{ pointerEvents: "auto" }}>
+            <GlassCard onHoverChange={setTachesExpanded}>
+              <Header icon="📋" title="Tâches" />
+              <div
+                className="px-3 pt-2 overflow-hidden transition-all duration-300 ease-out"
+                style={{
+                  maxHeight: tachesExpanded
+                    ? `${taches.length * 20 + 20}px`
+                    : `${PREVIEW * 20 + 12}px`,
+                }}
               >
-                +{extra} autres
-              </p>
-            )}
-          </GlassCard>
-        </div>
-      )}
+                {taches.map((t, i) => (
+                  <p
+                    key={i}
+                    className="text-[11px] leading-snug truncate pb-1 transition-opacity duration-200"
+                    style={{
+                      color:   `rgba(255,255,255,${Math.max(0.3, 0.70 - i * 0.08)})`,
+                      opacity: i < PREVIEW || tachesExpanded ? 1 : 0,
+                    }}
+                  >
+                    {t}
+                  </p>
+                ))}
+              </div>
+              {extraTaches > 0 && (
+                <p
+                  className="px-3 pb-2 text-[9px] font-mono text-white/20 transition-opacity duration-200"
+                  style={{ opacity: tachesExpanded ? 0 : 1 }}
+                >
+                  +{extraTaches} autres
+                </p>
+              )}
+            </GlassCard>
+          </div>
+        )}
+
+        {/* Fils ouverts */}
+        {threads.length > 0 && (
+          <div style={{ pointerEvents: "auto" }}>
+            <GlassCard onHoverChange={setThreadsExpanded}>
+              <Header icon="◎" title="Fils ouverts" />
+              <div
+                className="px-3 pt-2 overflow-hidden transition-all duration-300 ease-out"
+                style={{
+                  maxHeight: threadsExpanded
+                    ? `${threads.length * 20 + 20}px`
+                    : `${PREVIEW * 20 + 12}px`,
+                }}
+              >
+                {threads.map((t, i) => (
+                  <p
+                    key={i}
+                    className="text-[11px] leading-snug truncate pb-1 transition-opacity duration-200"
+                    style={{
+                      color:   `rgba(255,255,255,${Math.max(0.3, 0.70 - i * 0.08)})`,
+                      opacity: i < PREVIEW || threadsExpanded ? 1 : 0,
+                    }}
+                  >
+                    {t}
+                  </p>
+                ))}
+              </div>
+              {extraThreads > 0 && (
+                <p
+                  className="px-3 pb-2 text-[9px] font-mono text-white/20 transition-opacity duration-200"
+                  style={{ opacity: threadsExpanded ? 0 : 1 }}
+                >
+                  +{extraThreads} autres
+                </p>
+              )}
+            </GlassCard>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

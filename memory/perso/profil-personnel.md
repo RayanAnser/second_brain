@@ -1,14 +1,9 @@
 # Profil personnel
 
-## Parents
-- Mère : Djamila
-- Père : Mohamed
-
-## Origine
-Avignon, Vaucluse
-
-## Nourriture
-- Préférée : sushis
+## Identité personnelle
+- Origine : Avignon, Vaucluse
+- Couleur préférée : vert
+- Nourriture préférée : sushis
 - Aime aussi : steaks frites, msemen
 
 ## Famille
@@ -26,24 +21,20 @@ Avignon, Vaucluse
 **Contexte social récent (2026-05-23) :**
 Deux cercles dans le "groupe" :
 - **Noyau choisi** : Charles, Victor, Louis, Maxime (à Metz) — amis proches, motivations sociales principales
-- **Les autres** : Simon, Guette — pas des connards, mais pas cool, hyper exclusifs. Impression d'être à part, parce que pas originalement dans le groupe d'origine.
+- **Les autres** : Simon, Guette — pas des connards, mais pas cool, hyper exclusifs.
 
 **Observation :** Motivation principale pour voir ce groupe mixte = présence de Charles, Victor, Louis. Ils ont des activités/parcours similaires. Louis fait la même chose que Rayän concernant Charles et Victor (observation confirmée 2026-05-23).
 
 ## Relations sentimentales
+- Crush sur Maya (capturé le 2026-05-23 — première présentation aux amis ce jour)
 
-- Crush sur Maya (capturé le 2026-05-23 — première présentation aux amis ce jour, tension lors de l'événement)
-
-**Note :** Aucune information complémentaire disponible pour l'instant.
-
-## Agenda
-- **Mardi 9 juin 2026, 17h** : Rendez-vous avec Ségolène
-- **Vendredi 30 mai 2026** : Voir Sacha, Alice et Paul
-- **Samedi 31 mai 2026** : Anniversaire d'Estelle
-
-**Note :** Le rendez-vous avec Ségolène était initialement prévu mais non daté précisément.
-
-## Amis
-- Charles
-- Louis
-- Victor
+## Notes automatiques
+- est gaucher  _(jarvis, 2026-05-27)_
+- joue au ping-pong côté droitier  _(jarvis, 2026-05-27)_
+- aime le tennis  _(jarvis, 2026-05-27)_
+- aime le couscous  _(jarvis, 2026-05-27)_
+- Maya a un chien  _(jarvis, 2026-05-27)_
+- Maya a 35 ans  _(jarvis, 2026-05-27)_
+- Maya est franco-américaine  _(jarvis, 2026-05-27)_
+- Maya vient du New Jersey  _(jarvis, 2026-05-27)_
+- Maya est très belle  _(jarvis, 2026-05-27)_

@@ -101,9 +101,11 @@ LOGS_DIR        = MEMORY_DIR / "logs"
 PROJETS_DIR     = MEMORY_DIR / "projets"
 CONCEPTS_DIR    = MEMORY_DIR / "concepts"
 PERSO_DIR       = MEMORY_DIR / "perso"
+PROFIL_PERSO_MD    = MEMORY_DIR / "perso" / "profil-personnel.md"
 STAGING_FILE       = MEMORY_DIR / "staging.json"
 COMMANDS_MD        = MEMORY_DIR / "COMMANDS.md"
 AGENDA_MD          = MEMORY_DIR / "agenda.md"
+TACHES_MD          = MEMORY_DIR / "taches.md"
 CONSOLIDATION_FILE  = MEMORY_DIR / "last_consolidation.json"
 RAG_DB              = MEMORY_DIR / "embeddings" / "index.db"
 MEMORY_ARCHIVE_MD   = MEMORY_DIR / "memory_archive.md"
@@ -500,7 +502,12 @@ def load_staging() -> bool:
 
 def build_memory_context() -> str:
     parts = []
-    for path, label in [(SOUL_MD, "memory/soul.md"), (USER_MD, "memory/user.md"), (MEMORY_MD, "memory/memory.md")]:
+    for path, label in [
+        (SOUL_MD,    "memory/soul.md"),
+        (USER_MD,    "memory/user.md"),
+        (MEMORY_MD,  "memory/memory.md"),
+        (TACHES_MD,  "memory/taches.md"),
+    ]:
         parts.append(f"[{label}]\n{path.read_text() if path.exists() else '(absent)'}")
     for subdir, name in [(PROJETS_DIR, "projets"), (CONCEPTS_DIR, "concepts"), (PERSO_DIR, "perso")]:
         if not subdir.exists():
@@ -768,8 +775,13 @@ def _append_to_section(file_path: Path, section: str, line: str):
 
 
 def _dispatch_tache(content: str):
-    _append_to_section(MEMORY_MD, "Fils ouverts", content)
-    _push_to_github(MEMORY_MD, MEMORY_MD.read_text())
+    TACHES_MD.parent.mkdir(parents=True, exist_ok=True)
+    timestamp  = datetime.now().strftime("%Y-%m-%d")
+    entry_line = f"{content}  _({timestamp})_"
+    _append_to_section(TACHES_MD, "En cours", entry_line)
+    _push_to_github(TACHES_MD, TACHES_MD.read_text())
+    if _RAG_AVAILABLE and get_rag():
+        threading.Thread(target=get_rag().index_modified, daemon=True).start()
 
 
 # ── Agenda ───────────────────────────────────────────────────────────────────
@@ -1323,7 +1335,7 @@ async def _http_memory_commit(request):
         entry_line    = f"{content_text}  _(jarvis, {timestamp})_"
 
         if section == "user":
-            target_file   = USER_MD
+            target_file   = PROFIL_PERSO_MD
             section_title = "Notes automatiques"
         else:
             target_file   = MEMORY_MD
@@ -1366,10 +1378,10 @@ async def _http_memory_commit(request):
 async def _http_staging_confirm(request):
     """POST /staging/confirm {index} — route par type vers le bon stockage companion.
 
-    TACHE        → memory.md "Fils ouverts"         (même logique que _dispatch_tache Telegram)
-    CAPTURE_PERSO → user.md "Notes automatiques"
-    CAPTURE_*    → memory.md "Captures confirmées"
-    MEMORY       → refusé (utiliser /memory/commit)
+    TACHE         → taches.md "En cours"
+    CAPTURE_PERSO → perso/profil-personnel.md "Notes automatiques"  (hors system prompt, RAG uniquement)
+    CAPTURE_*     → memory.md "Captures confirmées"
+    MEMORY        → refusé (utiliser /memory/commit)
     """
     try:
         data  = await request.json()
@@ -1396,8 +1408,9 @@ async def _http_staging_confirm(request):
         if hint == "TACHE":
             _dispatch_tache(content)
         elif hint == "CAPTURE_PERSO":
-            _append_to_section(USER_MD, "Notes automatiques", entry_line)
-            _push_to_github(USER_MD, USER_MD.read_text())
+            PROFIL_PERSO_MD.parent.mkdir(parents=True, exist_ok=True)
+            _append_to_section(PROFIL_PERSO_MD, "Notes automatiques", entry_line)
+            _push_to_github(PROFIL_PERSO_MD, PROFIL_PERSO_MD.read_text())
         else:
             # CAPTURE_IDEE, CAPTURE_CONCEPT, CAPTURE_PROJET
             _append_to_section(MEMORY_MD, "Captures confirmées", entry_line)

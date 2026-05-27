@@ -176,7 +176,20 @@ export default function App() {
     invoke("debug_memory").then((info) => console.log("[jarvis] debug_memory:", info)).catch(console.error);
     invoke<MemoryContext>("read_memory_context").then(setMemoryContext).catch(console.error);
     invoke<Capture[]>("fetch_staging").then(setCaptures).catch(console.error);
-    invoke<WidgetsContext>("read_widgets_context").then(setWidgetsCtx).catch(console.error);
+    invoke<WidgetsContext>("read_widgets_context")
+      .then((ctx) => { console.log("[jarvis] widgets_context:", JSON.stringify(ctx)); setWidgetsCtx(ctx); })
+      .catch(console.error);
+  }, []);
+
+  // Refresh widgets every 30s so taches/agenda/threads stay current
+  useEffect(() => {
+    const id = setInterval(
+      () => invoke<WidgetsContext>("read_widgets_context")
+              .then(setWidgetsCtx)
+              .catch(console.error),
+      30_000,
+    );
+    return () => clearInterval(id);
   }, []);
 
   // Poll captures every 5s

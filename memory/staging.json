@@ -1,40 +1,9 @@
 {
   "7649220324": [
     {
-      "content": "mayonnaise maison",
+      "content": "Inviter quelqu'un en disant 'ça me ferait plaisir de' au lieu de 'si'",
       "hint": "CAPTURE_IDEE",
-      "timestamp": "2026-05-27 18:57"
-    },
-    {
-      "content": "ketchup maison",
-      "hint": "CAPTURE_IDEE",
-      "timestamp": "2026-05-27 18:57"
-    },
-    {
-      "content": "faire un podcast",
-      "hint": "CAPTURE_IDEE",
-      "timestamp": "2026-05-27 19:07"
-    },
-    {
-      "content": "L'utilisateur est gaucher.",
-      "hint": "MEMORY",
-      "timestamp": "2026-05-27 19:08",
-      "section": "user"
-    },
-    {
-      "content": "je suis gaucher",
-      "hint": "CAPTURE_PERSO",
-      "timestamp": "2026-05-27 19:08"
-    },
-    {
-      "content": "aime le foot",
-      "hint": "CAPTURE_PERSO",
-      "timestamp": "2026-05-27 19:08"
-    },
-    {
-      "content": "aime le tennis",
-      "hint": "CAPTURE_PERSO",
-      "timestamp": "2026-05-27 19:08"
+      "timestamp": "2026-05-27 20:39"
     }
   ]
 }

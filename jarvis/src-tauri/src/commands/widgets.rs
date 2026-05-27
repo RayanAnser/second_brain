@@ -26,19 +26,31 @@ pub struct WidgetsContext {
     pub agenda:   Vec<AgendaItem>,
     pub projects: Vec<ProjectItem>,
     pub threads:  Vec<String>,
+    pub taches:   Vec<String>,
 }
 
 fn parse_agenda(content: &str) -> Vec<AgendaItem> {
-    content
-        .lines()
-        .filter_map(|l| {
-            let s = l.trim_start_matches("- ").trim();
-            let mut it = s.splitn(2, " | ");
-            let time  = it.next()?.trim().to_string();
-            let label = it.next()?.trim().to_string();
-            if time.contains(':') && !label.is_empty() { Some(AgendaItem { time, label }) } else { None }
-        })
-        .collect()
+    // Only show items from today onward. Sections are ## YYYY-MM-DD.
+    let today = chrono::Local::now().format("%Y-%m-%d").to_string();
+    let mut items = Vec::new();
+    let mut cur_date = String::new();
+
+    for line in content.lines() {
+        if line.starts_with("## ") {
+            cur_date = line[3..].trim().to_string();
+            continue;
+        }
+        if cur_date < today && !cur_date.is_empty() { continue; }
+        if !line.starts_with("- ") { continue; }
+        let s = line[2..].trim();
+        let mut it = s.splitn(2, " | ");
+        let time  = it.next().unwrap_or("").trim().to_string();
+        let label = it.next().unwrap_or("").trim().to_string();
+        if time.contains(':') && !label.is_empty() {
+            items.push(AgendaItem { time, label });
+        }
+    }
+    items
 }
 
 fn shorten_name(name: &str) -> String {
@@ -85,6 +97,24 @@ fn parse_projects(content: &str) -> Vec<ProjectItem> {
     projects
 }
 
+fn parse_taches(content: &str) -> Vec<String> {
+    let mut taches = Vec::new();
+    let mut in_section = false;
+    for line in content.lines() {
+        if !in_section {
+            if line.trim() == "## En cours" { in_section = true; }
+            continue;
+        }
+        if line.starts_with("## ") { break; }
+        if line.starts_with("- ") {
+            let raw = line[2..].trim();
+            let clean = raw.split("  _(").next().unwrap_or(raw).trim().to_string();
+            if !clean.is_empty() { taches.push(clean); }
+        }
+    }
+    taches
+}
+
 fn parse_threads(content: &str) -> Vec<String> {
     let mut threads     = Vec::new();
     let mut in_section  = false;
@@ -103,9 +133,11 @@ fn parse_threads(content: &str) -> Vec<String> {
 
 #[tauri::command]
 pub fn read_widgets_context() -> WidgetsContext {
+    let memory = read_file("memory.md");
     WidgetsContext {
         agenda:   parse_agenda(&read_file("agenda.md")),
-        projects: parse_projects(&read_file("memory.md")),
-        threads:  parse_threads(&read_file("memory.md")),
+        projects: parse_projects(&memory),
+        threads:  parse_threads(&memory),
+        taches:   parse_taches(&read_file("taches.md")),
     }
 }
