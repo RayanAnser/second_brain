@@ -109,6 +109,7 @@ export default function App() {
 
   // ── Window mode helpers ────────────────────────────────────────────────────
   const expandWindow = useCallback(() => {
+    console.log("EXPANDING");
     invoke("set_window_extended").catch(console.error);
     setIsCompact(false);
   }, [setIsCompact]);
@@ -116,11 +117,13 @@ export default function App() {
   // Single click → toggle micro. Double click → expand only (no mic).
   const handleOrbClick = useCallback(() => {
     if (clickTimer.current) {
+      console.log("DOUBLE CLICK");
       clearTimeout(clickTimer.current);
       clickTimer.current = null;
       expandWindow();
       setIsPinned(true);
     } else {
+      console.log("SINGLE CLICK");
       clickTimer.current = setTimeout(() => {
         clickTimer.current = null;
         if (isListening) stopListening();
@@ -235,6 +238,8 @@ export default function App() {
 
   const visibleCards = captures.slice(0, 5);
 
+  console.log("isCompact:", isCompact);
+
   // ── COMPACT MODE ───────────────────────────────────────────────────────────
   if (isCompact) {
     return (
@@ -243,10 +248,26 @@ export default function App() {
           <OrbVisualizer state={orbState} audioLevel={audioLevel} />
         </div>
 
-        {/* Drag + single-click=toggle micro, double-click=expand */}
+        {/* Drag + single-click=toggle micro, double-click=expand.
+            startDragging() is intentionally NOT called on every mousedown: calling it
+            immediately enters the Windows OS modal move-loop (WM_SYSCOMMAND SC_MOVE),
+            which blocks the JS event loop so the second click never reaches React.
+            Instead we start drag only after real movement (>4px), letting click events
+            flow normally so the double-click timer works. */}
         <div
-          data-tauri-drag-region
           className="absolute inset-0 cursor-move"
+          onMouseDown={(e) => {
+            if (e.button !== 0) return;
+            const startX = e.clientX, startY = e.clientY;
+            const onMove = (me: MouseEvent) => {
+              if (Math.abs(me.clientX - startX) > 4 || Math.abs(me.clientY - startY) > 4) {
+                window.removeEventListener("mousemove", onMove);
+                getCurrentWindow().startDragging().catch(console.error);
+              }
+            };
+            window.addEventListener("mousemove", onMove);
+            window.addEventListener("mouseup", () => window.removeEventListener("mousemove", onMove), { once: true });
+          }}
           onClick={handleOrbClick}
         />
 
@@ -271,11 +292,11 @@ export default function App() {
 
   // ── EXTENDED MODE ──────────────────────────────────────────────────────────
   return (
-    <div className="relative h-screen overflow-hidden bg-[#0a0a0f]">
+    <div className="relative h-screen overflow-hidden bg-surface" style={{ background: "#0a0a0f" }}>
 
       {/* ── Full-canvas orb — first in DOM, no z-index; UI elements below paint over it ── */}
       <div className="absolute inset-0 pointer-events-none">
-        <OrbVisualizer state={orbState} audioLevel={audioLevel} />
+        <OrbVisualizer state={orbState} audioLevel={audioLevel} opaque />
       </div>
 
       {/* ── Context widgets ── */}

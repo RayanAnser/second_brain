@@ -111,9 +111,11 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export function OrbVisualizer({
   state,
   audioLevel = 0,
+  opaque = false,
 }: {
   state: OrbState;
   audioLevel?: number;
+  opaque?: boolean;
 }) {
   const containerRef  = useRef<HTMLDivElement>(null);
   const stateRef      = useRef(state);
@@ -133,11 +135,13 @@ export function OrbVisualizer({
     camera.position.z = 2.2;
 
     // ── Renderer ───────────────────────────────────────────────────────────
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    // opaque=true (extended mode): alpha:false + dark clear so WebGL pixels are fully
+    // opaque and the Tauri transparent-window compositor can't bleed the desktop through.
+    const renderer = new THREE.WebGLRenderer({ alpha: !opaque, antialias: true });
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     // updateStyle=false: we control CSS ourselves to avoid overrides on resize
     renderer.setSize(W, H, false);
-    renderer.setClearColor(0x000000, 0);
+    renderer.setClearColor(opaque ? 0x0a0a0f : 0x000000, opaque ? 1 : 0);
     Object.assign(renderer.domElement.style, {
       display:    "block",
       position:   "absolute",
@@ -336,7 +340,12 @@ export function OrbVisualizer({
         container.removeChild(renderer.domElement);
       }
     };
-  }, []);
+  // opaque in deps: when mode switches compact↔extended, React reconciles the same
+  // OrbVisualizer instance (same position in tree) and only updates props — the effect
+  // with [] would NOT re-run, keeping the old alpha:true renderer. Adding opaque forces
+  // cleanup + recreation with the correct alpha/clearColor for the new mode.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [opaque]);
 
   return <div ref={containerRef} className="absolute inset-0" />;
 }
