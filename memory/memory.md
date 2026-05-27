@@ -57,3 +57,10 @@
 - Sprint 7 (RAG SQLite) : prochaine étape roadmap
 - Monitoring coûts API long terme : à mettre en place
 - acheter des chaussettes
+- acheter des courses
+- acheter des poirots
+- acheter de l'huile d'olive
+- acheter du ketchup
+- acheter ketchup et mayonnaise
+- acheter du pain
+- acheter de l'huile d'olive

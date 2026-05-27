@@ -19,11 +19,11 @@ interface StateTarget {
 // connectionDist reduced 20% vs original for fewer, more readable connections
 const T: Record<OrbState, StateTarget> = {
   idle: {
-    particleCount: 350, radius: 1.30, connectionDist: 0.42, pointSize: 3.75,
-    rotationSpeed: 0.0003, coreScale: 1.0,
-    colorParticle: new THREE.Color(0xa78bfa),
+    particleCount: 350, radius: 1.30, connectionDist: 0.42, pointSize: 4.5,
+    rotationSpeed: 0.0003, coreScale: 1.2,
+    colorParticle: new THREE.Color(0xd4aaff),
     colorLine:     new THREE.Color(0x6366f1),
-    colorCore:     new THREE.Color(0x818cf8),
+    colorCore:     new THREE.Color(0xb4bcff),
   },
   listening: {
     particleCount: 80,  radius: 0.85, connectionDist: 0.36, pointSize: 2.0,
@@ -216,7 +216,7 @@ export function OrbVisualizer({
       transparent: true, opacity: 0, depthWrite: false,
     });
     const haloSprite = new THREE.Sprite(haloMat);
-    haloSprite.scale.setScalar(4.0);
+    haloSprite.scale.setScalar(5.5);
     scene.add(haloSprite);
 
     // ── Lerped state (mutated each frame) ──────────────────────────────────
@@ -315,7 +315,7 @@ export function OrbVisualizer({
       ptUniforms.ptColor.value.copy(cur.colorParticle);
       lineUniforms.lineColor.value.copy(cur.colorLine);
       lineUniforms.lineOpacity.value = Math.min(1.0, 0.6 + al * 0.3);
-      haloMat.opacity = lerp(haloMat.opacity, stateRef.current === "idle" ? 0.4 : 0.0, 0.04);
+      haloMat.opacity = lerp(haloMat.opacity, stateRef.current === "idle" ? 0.65 : 0.12, 0.04);
       coreMat.color.copy(cur.colorCore);
       coreMesh.scale.setScalar(cur.coreScale);
 

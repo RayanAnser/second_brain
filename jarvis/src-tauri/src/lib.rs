@@ -54,6 +54,8 @@ pub fn run() {
             commands::memory::fetch_staging,
             commands::memory::read_staging,
             commands::memory::delete_staging,
+            commands::memory::commit_memory_item,
+            commands::memory::confirm_staging_item,
             commands::memory::debug_memory,
             commands::gemini_live::transcribe_gemini,
             commands::claude::ask_claude,

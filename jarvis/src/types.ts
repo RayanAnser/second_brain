@@ -15,6 +15,7 @@ export interface DocEntry {
 export interface Capture {
   intent: string;
   content: string;
+  section?: string;
 }
 
 export interface MemoryContext {

@@ -12,6 +12,7 @@ pub fn set_window_compact(window: tauri::WebviewWindow) -> Result<(), String> {
     window.set_size(LogicalSize::new(COMPACT_W, COMPACT_H)).map_err(|e| e.to_string())?;
     window.set_always_on_top(true).map_err(|e| e.to_string())?;
     window.set_background_color(Some(Color(0, 0, 0, 0))).map_err(|e| e.to_string())?;
+    window.set_shadow(false).map_err(|e| e.to_string())?;
     eprintln!("[jarvis] window: compact mode ({}×{})", COMPACT_W, COMPACT_H);
     Ok(())
 }

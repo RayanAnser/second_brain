@@ -21,18 +21,27 @@ const INTENT_ICON: Record<string, string> = {
   CAPTURE_PROJET:  "🚀",
   CAPTURE_CONCEPT: "🧠",
   CAPTURE_PERSO:   "👤",
+  TACHE:           "📋",
+  MEMORY:          "💾",
 };
 
 function FloatingCard({
   capture,
   onDelete,
+  onCommit,
+  onConfirm,
+  disabled,
   style,
 }: {
   capture: Capture;
   onDelete: () => void;
+  onCommit?: () => void;
+  onConfirm?: () => void;
+  disabled?: boolean;
   style?: CSSProperties;
 }) {
   const [hovered, setHovered] = useState(false);
+  const isMemory = capture.intent === "MEMORY";
   const icon = INTENT_ICON[capture.intent] ?? "📌";
 
   return (
@@ -41,24 +50,46 @@ function FloatingCard({
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       className={`flex items-center h-10 rounded-xl overflow-hidden pointer-events-auto
-                  bg-black/30 backdrop-blur-md border border-white/10
-                  transition-all duration-200 ease-out cursor-default select-none
+                  backdrop-blur-md border transition-all duration-200 ease-out cursor-default select-none
+                  ${isMemory ? "bg-amber-950/30 border-amber-500/20" : "bg-black/30 border-white/10"}
                   ${hovered ? "w-64" : "w-10"}`}
     >
       <span className="w-10 h-10 flex-shrink-0 flex items-center justify-center text-sm leading-none">
         {icon}
       </span>
       <div
-        className={`flex items-center gap-1 pr-2 min-w-0 flex-1 transition-opacity duration-100
+        className={`flex items-center gap-1 pr-1.5 min-w-0 flex-1 transition-opacity duration-100
                     ${hovered ? "opacity-100 delay-75" : "opacity-0"}`}
       >
-        <p className="text-[11px] text-white/80 truncate flex-1">{capture.content}</p>
-        <button
-          onClick={(e) => { e.stopPropagation(); onDelete(); }}
-          className="text-white/30 hover:text-white/80 text-[10px] flex-shrink-0 leading-none transition-colors"
-        >
-          ✕
-        </button>
+        <p className={`text-[11px] truncate flex-1 ${isMemory ? "text-amber-200/80" : "text-white/80"}`}>
+          {capture.content}
+        </p>
+        <div className="flex items-center gap-0.5 flex-shrink-0">
+          {isMemory ? (
+            <button
+              onClick={(e) => { e.stopPropagation(); if (!disabled) onCommit?.(); }}
+              disabled={disabled}
+              className="text-[9px] text-amber-400/70 hover:text-amber-300 bg-amber-900/30 hover:bg-amber-800/40 px-1.5 py-0.5 rounded leading-none transition-colors disabled:opacity-30"
+            >
+              → mem
+            </button>
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); if (!disabled) (onConfirm ?? onDelete)(); }}
+              disabled={disabled}
+              className="text-[9px] text-white/30 hover:text-white/60 bg-white/5 hover:bg-white/10 px-1.5 py-0.5 rounded leading-none transition-colors disabled:opacity-30"
+            >
+              → ok
+            </button>
+          )}
+          <button
+            onClick={(e) => { e.stopPropagation(); if (!disabled) onDelete(); }}
+            disabled={disabled}
+            className="text-white/25 hover:text-white/70 text-[10px] leading-none transition-colors ml-0.5 px-0.5 disabled:opacity-30"
+          >
+            ✕
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -98,7 +129,7 @@ export default function App() {
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [isPinned, setIsPinned] = useState(false);
   const [widgetsCtx, setWidgetsCtx] = useState<WidgetsContext | null>(null);
 
@@ -175,37 +206,26 @@ export default function App() {
   }, []);
 
   // ── Global Ctrl+Space hotkey (emitted from Rust) ───────────────────────────
+  // Hold-to-talk in both modes: keydown starts, keyup stops.
   useEffect(() => {
-    const unlistenStart = listen("hotkey-listen-start", () => {
-      if (isCompact) {
-        if (isListening) stopListening(); else startListening();
-      } else {
-        startListening();
-      }
-    });
-    const unlistenStop = listen("hotkey-listen-stop", () => {
-      if (!isCompact) stopListening();
-    });
+    const unlistenStart = listen("hotkey-listen-start", () => startListening());
+    const unlistenStop  = listen("hotkey-listen-stop",  () => stopListening());
     return () => {
       unlistenStart.then((fn) => fn());
       unlistenStop.then((fn) => fn());
     };
-  }, [isCompact, isListening, startListening, stopListening]);
+  }, [startListening, stopListening]);
 
-  // ── Spacebar binding ───────────────────────────────────────────────────────
+  // ── Spacebar binding — hold-to-talk in both modes ─────────────────────────
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.code === "Space" && !e.repeat && !(e.target as HTMLElement)?.matches("input,textarea")) {
         e.preventDefault();
-        if (isCompact) {
-          if (isListening) stopListening(); else startListening();
-        } else {
-          startListening();
-        }
+        startListening();
       }
     };
     const up = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !isCompact) stopListening();
+      if (e.code === "Space") stopListening();
     };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
@@ -213,7 +233,7 @@ export default function App() {
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
     };
-  }, [isCompact, isListening, startListening, stopListening]);
+  }, [startListening, stopListening]);
 
   // ── Auto-collapse to compact after inactivity ─────────────────────────────
   useEffect(() => {
@@ -227,16 +247,45 @@ export default function App() {
   }, [isListening, isThinking, isSpeaking, isCompact, isPinned, setIsCompact]);
 
   // ── Captures ───────────────────────────────────────────────────────────────
-  const deleteCapture = (i: number) => {
-    if (deleting) return;
-    setDeleting(true);
-    invoke<Capture[]>("delete_staging", { index: i })
+  const deleteCapture = (stagingIndex: number) => {
+    if (busy) return;
+    setBusy(true);
+    invoke<Capture[]>("delete_staging", { index: stagingIndex })
       .then(setCaptures)
       .catch((e) => console.error("[jarvis] delete_staging erreur:", e))
-      .finally(() => setDeleting(false));
+      .finally(() => setBusy(false));
   };
 
-  const visibleCards = captures.slice(0, 5);
+  const commitCapture = (stagingIndex: number) => {
+    if (busy) return;
+    setBusy(true);
+    console.log("[jarvis] memory committed index:", stagingIndex);
+    invoke<Capture[]>("commit_memory_item", { index: stagingIndex })
+      .then(setCaptures)
+      .catch((e) => console.error("[jarvis] commit_memory_item erreur:", e))
+      .finally(() => setBusy(false));
+  };
+
+  const confirmCapture = (stagingIndex: number) => {
+    if (busy) return;
+    setBusy(true);
+    console.log("[jarvis] staging confirmed index:", stagingIndex);
+    invoke<Capture[]>("confirm_staging_item", { index: stagingIndex })
+      .then(setCaptures)
+      .catch((e) => console.error("[jarvis] confirm_staging_item erreur:", e))
+      .finally(() => setBusy(false));
+  };
+
+  // MEMORY items first, then others — preserves original staging indices for invoke calls
+  const sortedWithIdx = useMemo(() => {
+    const indexed = captures.map((c, i) => ({ capture: c, stagingIndex: i }));
+    return [
+      ...indexed.filter((x) => x.capture.intent === "MEMORY"),
+      ...indexed.filter((x) => x.capture.intent !== "MEMORY"),
+    ];
+  }, [captures]);
+
+  const visibleCards = sortedWithIdx.slice(0, 8);
 
   console.log("isCompact:", isCompact);
 
@@ -244,7 +293,10 @@ export default function App() {
   if (isCompact) {
     return (
       <div className="relative h-screen overflow-hidden" style={{ background: "transparent" }}>
-        <div className="absolute inset-0 pointer-events-none">
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{ filter: "drop-shadow(0 0 18px rgba(139,92,246,0.55)) drop-shadow(0 0 40px rgba(99,102,241,0.3))" }}
+        >
           <OrbVisualizer state={orbState} audioLevel={audioLevel} />
         </div>
 
@@ -327,12 +379,15 @@ export default function App() {
         className="absolute right-3 z-10 flex flex-col items-end gap-0 pointer-events-none"
         style={{ top: "2.75rem", bottom: "7rem" }}
       >
-        {visibleCards.map((c, i) => (
+        {visibleCards.map(({ capture, stagingIndex }, displayIdx) => (
           <FloatingCard
-            key={`${c.intent}-${c.content.slice(0, 20)}-${i}`}
-            capture={c}
-            onDelete={() => deleteCapture(i)}
-            style={{ marginTop: i > 0 ? "-4px" : undefined }}
+            key={`${capture.intent}-${capture.content.slice(0, 20)}-${stagingIndex}`}
+            capture={capture}
+            onDelete={() => deleteCapture(stagingIndex)}
+            onCommit={capture.intent === "MEMORY" ? () => commitCapture(stagingIndex) : undefined}
+            onConfirm={capture.intent !== "MEMORY" ? () => confirmCapture(stagingIndex) : undefined}
+            disabled={busy}
+            style={{ marginTop: displayIdx > 0 ? "-4px" : undefined }}
           />
         ))}
       </div>

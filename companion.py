@@ -446,13 +446,15 @@ async def _research_task(slug: str, query: str, chat_id: int, bot):
         )
 
 
-def stage_capture(user_id: int, content: str, hint: str):
+def stage_capture(user_id: int, content: str, hint: str, section: str | None = None):
     log.info(f"[stage_capture] user_id={user_id} staged_keys={list(staged_captures.keys())}")
     entry = {
         "content": content,
         "hint": hint,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M"),
     }
+    if section:
+        entry["section"] = section
     staged_captures.setdefault(user_id, []).append(entry)
     STAGING_FILE.parent.mkdir(parents=True, exist_ok=True)
     STAGING_FILE.write_text(json.dumps(
@@ -1190,10 +1192,15 @@ def _delete_staging_by_content(query: str) -> str | None:
 
 async def _http_get_staging(request):
     captures = staged_captures.get(int(CHAT_ID), [])
-    result = [
-        {"intent": cap.get("hint", cap.get("intent", "?")), "content": cap.get("content", "")}
-        for cap in captures
-    ]
+    result = []
+    for cap in captures:
+        item = {
+            "intent":  cap.get("hint", cap.get("intent", "?")),
+            "content": cap.get("content", ""),
+        }
+        if cap.get("section"):
+            item["section"] = cap["section"]
+        result.append(item)
     return aiohttp_web.json_response(result)
 
 
@@ -1243,10 +1250,12 @@ async def _http_delete_staging(request):
         log.info(f"[delete_staging] index={index} supprimé : {removed.get('content', '')!r}")
 
         current = staged_captures.get(uid, [])
-        result  = [
-            {"intent": c.get("hint", c.get("intent", "?")), "content": c.get("content", "")}
-            for c in current
-        ]
+        result  = []
+        for c in current:
+            item = {"intent": c.get("hint", c.get("intent", "?")), "content": c.get("content", "")}
+            if c.get("section"):
+                item["section"] = c["section"]
+            result.append(item)
         return aiohttp_web.json_response({"ok": True, "captures": result})
     except Exception as e:
         log.error(f"HTTP /delete_staging : {e}")
@@ -1278,14 +1287,146 @@ async def _http_stage(request):
         data    = await request.json()
         content = str(data.get("content", "")).strip()
         hint    = str(data.get("hint", "CAPTURE_IDEE"))
+        section = str(data.get("section", "")).strip() or None
         if not content:
             return aiohttp_web.Response(status=400, text="content required")
         uid = int(CHAT_ID)
-        log.info(f"[_http_stage] user_id={uid} hint={hint!r} content={content[:60]!r}")
-        stage_capture(uid, content, hint)
+        log.info(f"[_http_stage] user_id={uid} hint={hint!r} section={section!r} content={content[:60]!r}")
+        stage_capture(uid, content, hint, section)
         return aiohttp_web.json_response({"ok": True})
     except Exception as e:
         log.error(f"HTTP /stage : {e}")
+        return aiohttp_web.Response(status=500, text=str(e))
+
+
+async def _http_memory_commit(request):
+    """POST /memory/commit {index} — écrit l'item MEMORY dans memory.md ou user.md."""
+    try:
+        data  = await request.json()
+        index = int(data.get("index", -1))
+        uid   = int(CHAT_ID)
+
+        captures = staged_captures.get(uid, [])
+        if index < 0 or index >= len(captures):
+            return aiohttp_web.Response(
+                status=404,
+                text=f"index {index} hors limites ({len(captures)} captures)",
+            )
+
+        item = captures[index]
+        if item.get("hint") != "MEMORY":
+            return aiohttp_web.Response(status=400, text="l'item n'est pas de type MEMORY")
+
+        content_text  = item.get("content", "").strip()
+        section       = item.get("section", "memory")
+        timestamp     = datetime.now().strftime("%Y-%m-%d")
+        entry_line    = f"{content_text}  _(jarvis, {timestamp})_"
+
+        if section == "user":
+            target_file   = USER_MD
+            section_title = "Notes automatiques"
+        else:
+            target_file   = MEMORY_MD
+            section_title = "Mémoire auto"
+
+        _append_to_section(target_file, section_title, entry_line)
+        _push_to_github(target_file, target_file.read_text())
+        _invalidate_context_cache()
+        log.info(f"[memory_commit] écrit [{section}→{section_title}] : {content_text!r}")
+
+        if section != "user":
+            _archive_overflow()
+
+        if _RAG_AVAILABLE and get_rag():
+            threading.Thread(target=get_rag().index_modified, daemon=True).start()
+
+        # Retirer du staging
+        captures.pop(index)
+        if not captures:
+            staged_captures.pop(uid, None)
+        STAGING_FILE.write_text(json.dumps(
+            {str(k): v for k, v in staged_captures.items()},
+            ensure_ascii=False, indent=2,
+        ))
+
+        # Retourner la liste mise à jour
+        current = staged_captures.get(uid, [])
+        result  = []
+        for c in current:
+            r_item = {"intent": c.get("hint", c.get("intent", "?")), "content": c.get("content", "")}
+            if c.get("section"):
+                r_item["section"] = c["section"]
+            result.append(r_item)
+        return aiohttp_web.json_response({"ok": True, "captures": result})
+    except Exception as e:
+        log.error(f"HTTP /memory/commit : {e}")
+        return aiohttp_web.Response(status=500, text=str(e))
+
+
+async def _http_staging_confirm(request):
+    """POST /staging/confirm {index} — route par type vers le bon stockage companion.
+
+    TACHE        → memory.md "Fils ouverts"         (même logique que _dispatch_tache Telegram)
+    CAPTURE_PERSO → user.md "Notes automatiques"
+    CAPTURE_*    → memory.md "Captures confirmées"
+    MEMORY       → refusé (utiliser /memory/commit)
+    """
+    try:
+        data  = await request.json()
+        index = int(data.get("index", -1))
+        uid   = int(CHAT_ID)
+
+        captures = staged_captures.get(uid, [])
+        if index < 0 or index >= len(captures):
+            return aiohttp_web.Response(
+                status=404,
+                text=f"index {index} hors limites ({len(captures)} captures)",
+            )
+
+        item    = captures[index]
+        hint    = item.get("hint", "CAPTURE_IDEE")
+        content = item.get("content", "").strip()
+
+        if hint == "MEMORY":
+            return aiohttp_web.Response(status=400, text="utilise /memory/commit pour les items MEMORY")
+
+        timestamp  = datetime.now().strftime("%Y-%m-%d")
+        entry_line = f"{content}  _(jarvis, {timestamp})_"
+
+        if hint == "TACHE":
+            _dispatch_tache(content)
+        elif hint == "CAPTURE_PERSO":
+            _append_to_section(USER_MD, "Notes automatiques", entry_line)
+            _push_to_github(USER_MD, USER_MD.read_text())
+        else:
+            # CAPTURE_IDEE, CAPTURE_CONCEPT, CAPTURE_PROJET
+            _append_to_section(MEMORY_MD, "Captures confirmées", entry_line)
+            _push_to_github(MEMORY_MD, MEMORY_MD.read_text())
+            _archive_overflow()
+
+        _invalidate_context_cache()
+        if _RAG_AVAILABLE and get_rag():
+            threading.Thread(target=get_rag().index_modified, daemon=True).start()
+        log.info(f"[staging_confirm] [{hint}] : {content!r}")
+
+        captures.pop(index)
+        if not captures:
+            staged_captures.pop(uid, None)
+        STAGING_FILE.write_text(json.dumps(
+            {str(k): v for k, v in staged_captures.items()},
+            ensure_ascii=False, indent=2,
+        ))
+
+        current = staged_captures.get(uid, [])
+        result  = []
+        for c in current:
+            r_item = {"intent": c.get("hint", c.get("intent", "?")), "content": c.get("content", "")}
+            if c.get("section"):
+                r_item["section"] = c["section"]
+            result.append(r_item)
+        return aiohttp_web.json_response({"ok": True, "captures": result})
+    except Exception as e:
+        log.error(f"HTTP /staging/confirm : {e}")
         return aiohttp_web.Response(status=500, text=str(e))
 
 
@@ -2252,6 +2393,8 @@ async def on_startup(app):
         _http_app.router.add_post("/delete_staging",            _http_delete_staging)
         _http_app.router.add_post("/delete_staging_by_content", _http_delete_staging_by_content)
         _http_app.router.add_post("/rag_search",                _http_rag_search)
+        _http_app.router.add_post("/memory/commit",             _http_memory_commit)
+        _http_app.router.add_post("/staging/confirm",          _http_staging_confirm)
         runner = aiohttp_web.AppRunner(_http_app)
         await runner.setup()
         site = aiohttp_web.TCPSite(runner, "0.0.0.0", 8765)

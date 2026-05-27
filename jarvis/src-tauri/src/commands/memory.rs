@@ -35,6 +35,8 @@ pub struct DocEntry {
 pub struct Capture {
     pub intent:  String,
     pub content: String,
+    #[serde(default)]
+    pub section: Option<String>,
 }
 
 #[tauri::command]
@@ -139,6 +141,7 @@ fn captures_from_json(json: &serde_json::Value) -> Vec<Capture> {
                         intent:  item.get("hint").or_else(|| item.get("intent"))
                                      .and_then(|v| v.as_str()).unwrap_or("?").to_string(),
                         content: item.get("content").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                        section: item.get("section").and_then(|v| v.as_str()).map(str::to_owned),
                     });
                 }
             }
@@ -244,4 +247,55 @@ pub async fn delete_staging(index: usize) -> Result<Vec<Capture>, String> {
 
     // Companion unreachable — fall back to direct file manipulation
     delete_from_file(index)
+}
+
+/// Confirms a non-MEMORY staging item: routes it to the appropriate companion endpoint
+/// (TACHE → fils ouverts, CAPTURE_PERSO → user.md, others → memory.md "Captures confirmées").
+/// Returns the updated capture list.
+#[tauri::command]
+pub async fn confirm_staging_item(index: usize) -> Result<Vec<Capture>, String> {
+    let companion_url = std::env::var("COMPANION_URL")
+        .unwrap_or_else(|_| "http://localhost:8765".to_string());
+
+    let resp = http_client()
+        .post(format!("{companion_url}/staging/confirm"))
+        .json(&serde_json::json!({"index": index}))
+        .send()
+        .await
+        .map_err(|e| format!("companion injoignable: {e}"))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body   = resp.text().await.unwrap_or_default();
+        return Err(format!("/staging/confirm {status}: {body}"));
+    }
+
+    let data = resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())?;
+    serde_json::from_value::<Vec<Capture>>(data["captures"].clone())
+        .map_err(|e| e.to_string())
+}
+
+/// Writes a MEMORY staging item into memory.md or user.md via the companion,
+/// then removes it from staging.  Returns the updated capture list.
+#[tauri::command]
+pub async fn commit_memory_item(index: usize) -> Result<Vec<Capture>, String> {
+    let companion_url = std::env::var("COMPANION_URL")
+        .unwrap_or_else(|_| "http://localhost:8765".to_string());
+
+    let resp = http_client()
+        .post(format!("{companion_url}/memory/commit"))
+        .json(&serde_json::json!({"index": index}))
+        .send()
+        .await
+        .map_err(|e| format!("companion injoignable: {e}"))?;
+
+    if !resp.status().is_success() {
+        let status = resp.status();
+        let body   = resp.text().await.unwrap_or_default();
+        return Err(format!("/memory/commit {status}: {body}"));
+    }
+
+    let data = resp.json::<serde_json::Value>().await.map_err(|e| e.to_string())?;
+    serde_json::from_value::<Vec<Capture>>(data["captures"].clone())
+        .map_err(|e| e.to_string())
 }

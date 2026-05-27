@@ -28,3 +28,6 @@
 3. **Sparring** — challenger, connecter les idées, relancer
 4. **Capture** — accumuler et relier, pas juste stocker
 5. **Espace émotionnel** — journal/diary, décharger ce qui s'accumule
+
+## Notes automatiques
+- ping-pong droitier  _(jarvis, 2026-05-27)_
