@@ -184,9 +184,12 @@ export default function App() {
   // Refresh widgets every 30s so taches/agenda/threads stay current
   useEffect(() => {
     const id = setInterval(
-      () => invoke<WidgetsContext>("read_widgets_context")
-              .then(setWidgetsCtx)
-              .catch(console.error),
+      () => {
+        console.log("[jarvis] poll: widgets refresh");
+        invoke<WidgetsContext>("read_widgets_context")
+          .then((ctx) => { console.log("[jarvis] poll: widgets updated — agenda:", ctx.agenda.length, "taches:", ctx.taches.length); setWidgetsCtx(ctx); })
+          .catch(console.error);
+      },
       30_000,
     );
     return () => clearInterval(id);
@@ -195,7 +198,10 @@ export default function App() {
   // Poll captures every 5s
   useEffect(() => {
     const id = setInterval(
-      () => invoke<Capture[]>("fetch_staging").then(setCaptures).catch(console.error),
+      () => {
+        console.log("[jarvis] poll: captures refresh");
+        invoke<Capture[]>("fetch_staging").then(setCaptures).catch(console.error);
+      },
       5000,
     );
     return () => clearInterval(id);
@@ -214,6 +220,17 @@ export default function App() {
         () => invoke<Capture[]>("fetch_staging").then(setCaptures).catch(console.error),
         delay,
       );
+      const isAgenda = e.payload.includes("📅");
+      const isTache  = e.payload.includes("tâche");
+      if (isAgenda || isTache) {
+        console.log("[jarvis] claude-capture: refresh widgets immédiat (", e.payload, ")");
+        setTimeout(
+          () => invoke<WidgetsContext>("read_widgets_context")
+                  .then((ctx) => { console.log("[jarvis] claude-capture: widgets updated"); setWidgetsCtx(ctx); })
+                  .catch(console.error),
+          delay + 200,
+        );
+      }
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);

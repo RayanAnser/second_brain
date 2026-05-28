@@ -844,6 +844,10 @@ def dispatch_agenda_query(slug: str) -> str:
         dates = [today.strftime("%Y-%m-%d")]
     elif slug == "semaine":
         dates = [(today + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+    elif slug in ("semaine prochaine", "next-week"):
+        days_to_monday = (7 - today.weekday()) % 7 or 7
+        next_monday = today + timedelta(days=days_to_monday)
+        dates = [(next_monday + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
     else:
         dates = [slug]
 
@@ -858,6 +862,8 @@ def dispatch_agenda_query(slug: str) -> str:
             return "Aucun RDV aujourd'hui."
         elif slug == "semaine":
             return "Aucun RDV cette semaine."
+        elif slug in ("semaine prochaine", "next-week"):
+            return "Aucun RDV la semaine prochaine."
         else:
             return f"Aucun RDV le {slug}."
 
@@ -1229,6 +1235,50 @@ async def _http_delete_staging_by_content(request):
         return aiohttp_web.json_response({"ok": False, "deleted": None})
     except Exception as e:
         log.error(f"HTTP /delete_staging_by_content : {e}")
+        return aiohttp_web.Response(status=500, text=str(e))
+
+
+async def _http_agenda_add(request):
+    """POST /agenda/add {date, content} — ajoute un RDV dans agenda.md."""
+    try:
+        data    = await request.json()
+        date    = str(data.get("date",    "")).strip()
+        content = str(data.get("content", "")).strip()
+        if not date or not content:
+            return aiohttp_web.Response(status=400, text="date and content required")
+        result = dispatch_agenda_add(date, content)
+        log.info(f"[agenda_add] {date} : {content}")
+        return aiohttp_web.json_response({"ok": True, "message": result})
+    except Exception as e:
+        log.error(f"HTTP /agenda/add : {e}")
+        return aiohttp_web.Response(status=500, text=str(e))
+
+
+async def _http_agenda_query(request):
+    """GET /agenda/query?range=today|week|YYYY-MM-DD — consulte l'agenda."""
+    try:
+        range_ = request.rel_url.query.get("range", "aujourd'hui")
+        result = dispatch_agenda_query(range_)
+        log.info(f"[agenda_query] range={range_!r} → {len(result)} chars")
+        return aiohttp_web.json_response({"ok": True, "result": result})
+    except Exception as e:
+        log.error(f"HTTP /agenda/query : {e}")
+        return aiohttp_web.Response(status=500, text=str(e))
+
+
+async def _http_user_update(request):
+    """POST /user/update {request} — applique immédiatement un patch user.md (pas de confirmation UI)."""
+    try:
+        data     = await request.json()
+        req_text = str(data.get("request", "")).strip()
+        if not req_text:
+            return aiohttp_web.Response(status=400, text="request required")
+        patch = await extract_user_update(req_text)
+        write_user_update(patch)
+        log.info(f"[user_update] patch appliqué : {patch[:80]!r}")
+        return aiohttp_web.json_response({"ok": True, "patch": patch})
+    except Exception as e:
+        log.error(f"HTTP /user/update : {e}")
         return aiohttp_web.Response(status=500, text=str(e))
 
 
@@ -2408,6 +2458,9 @@ async def on_startup(app):
         _http_app.router.add_post("/rag_search",                _http_rag_search)
         _http_app.router.add_post("/memory/commit",             _http_memory_commit)
         _http_app.router.add_post("/staging/confirm",          _http_staging_confirm)
+        _http_app.router.add_post("/agenda/add",               _http_agenda_add)
+        _http_app.router.add_get ("/agenda/query",             _http_agenda_query)
+        _http_app.router.add_post("/user/update",              _http_user_update)
         runner = aiohttp_web.AppRunner(_http_app)
         await runner.setup()
         site = aiohttp_web.TCPSite(runner, "0.0.0.0", 8765)

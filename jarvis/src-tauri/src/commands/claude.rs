@@ -1,3 +1,4 @@
+use chrono::Datelike;
 use futures_util::StreamExt;
 use serde::{Deserialize, Serialize};
 use std::sync::OnceLock;
@@ -19,7 +20,8 @@ const VOCAL_INSTRUCTION: &str = "\n\nTu es en mode vocal. Réponds en 1-3 phrase
 
 const CLASSIFY_SYSTEM: &str = "\
 Classifie le message utilisateur. Retourne UNIQUEMENT du JSON valide, sans texte autour.\n\
-Intentions : CAPTURE_IDEE, CAPTURE_PROJET, CAPTURE_CONCEPT, CAPTURE_PERSO, TACHE, DELETE_STAGING, CONVERSATION.\n\
+Intentions : CAPTURE_IDEE, CAPTURE_PROJET, CAPTURE_CONCEPT, CAPTURE_PERSO, TACHE,\n\
+             AGENDA_ADD, AGENDA_QUERY, SEARCH_MEMORY, DELETE_STAGING, CONVERSATION.\n\
 \n\
 DISTINCTION CRITIQUE — TACHE vs CAPTURE_IDEE :\n\
 TACHE = action concrète et immédiate avec un verbe d'action (acheter, appeler, envoyer, faire, vérifier, prendre rdv).\n\
@@ -39,24 +41,53 @@ Autres intentions :\n\
 CAPTURE_PROJET = projet structuré avec plusieurs étapes (\"lancer une startup\", \"écrire un livre\").\n\
 CAPTURE_CONCEPT = idée intellectuelle, notion, théorie (\"le paradoxe de Fermi\", \"le stoïcisme\").\n\
 CAPTURE_PERSO = information personnelle sur l'utilisateur (\"je suis gaucher\", \"j'ai 28 ans\", \"j'aime le café\").\n\
+AGENDA_ADD = ajouter un rendez-vous, événement ou rappel dans l'agenda (\"RDV dentiste vendredi 14h\", \"réunion lundi\").\n\
+  slug = date YYYY-MM-DD calculée depuis la date fournie (ex: si aujourd'hui est jeudi et l'utilisateur dit \"vendredi\" → date du lendemain).\n\
+  content = \"HH:MM | description concise\" (heure 24h). Ex: \"14:00 | Dentiste — Dr Martin\".\n\
+  Si pas d'heure précise : \"00:00 | description\".\n\
+AGENDA_QUERY = consulter l'agenda (\"c'est quoi mon agenda aujourd'hui\", \"qu'est-ce que j'ai cette semaine\").\n\
+  slug = \"aujourd'hui\" | \"semaine\" | \"semaine prochaine\" | YYYY-MM-DD selon la demande.\n\
+  content = \"\" (vide).\n\
+SEARCH_MEMORY = recherche dans la mémoire personnelle (\"qu'est-ce que j'ai noté sur X\", \"cherche dans mes notes\").\n\
+  slug = requête reformulée en kebab-case.\n\
+  content = requête reformulée en français, précise.\n\
 \n\
 Règles pour content :\n\
 - content = nom brut, SANS préfixe. JAMAIS \"Note :\", \"Idée :\", \"Tâche :\" ou tout autre label.\n\
 - Correct : \"acheter des piles\"  Incorrect : \"Tâche : acheter des piles\"\n\
 - Correct : \"faire un podcast\"   Incorrect : \"Idée : faire un podcast\"\n\
 \n\
-Format par défaut (un seul sujet) : {\"intent\": \"...\", \"content\": \"version épurée, concise\"}\n\
+Format par défaut (un seul sujet) : {\"intent\": \"...\", \"slug\": \"...\", \"content\": \"version épurée, concise\"}\n\
+Pour CAPTURE_*, TACHE, DELETE_STAGING, CONVERSATION : slug = \"\".\n\
 \n\
 DELETE_STAGING : supprimer une capture en attente (ex: \"supprime X\", \"enlève X\", \"retire ça\").\n\
 - content = nom exact de la capture à chercher, un seul nom par objet.\n\
 - Si l'utilisateur veut effacer PLUSIEURS captures, retourner UN objet DELETE_STAGING PAR capture.\n\
 - JAMAIS combiner plusieurs noms dans un seul content.\n\
 - Exemple pour \"efface Roland Garros et Club Maté\" :\n\
-  [{\"intent\": \"DELETE_STAGING\", \"content\": \"Roland Garros\"}, {\"intent\": \"DELETE_STAGING\", \"content\": \"Club Maté\"}]\n\
+  [{\"intent\": \"DELETE_STAGING\", \"slug\": \"\", \"content\": \"Roland Garros\"}, {\"intent\": \"DELETE_STAGING\", \"slug\": \"\", \"content\": \"Club Maté\"}]\n\
 \n\
 Si le message contient plusieurs intentions distinctes (CAPTURE_*, TACHE ou DELETE_STAGING), retourne un array.\n\
-N'utilise l'array que si les intentions sont vraiment distinctes. CONVERSATION : toujours un objet simple.\n\
+N'utilise l'array que si les intentions sont vraiment distinctes. CONVERSATION/SEARCH_MEMORY/AGENDA_* : toujours un objet simple.\n\
 En cas de doute : CONVERSATION.";
+
+/// Extracts the outermost JSON value from a string that may contain markdown fences,
+/// language tags, preamble text, or trailing backticks in any combination.
+/// Strategy: find the first [ or { and the last ] or }, return everything between them.
+fn strip_code_fence(s: &str) -> &str {
+    let s = s.trim();
+    let start = s.find(|c: char| c == '[' || c == '{');
+    let end = match (s.rfind(']'), s.rfind('}')) {
+        (Some(a), Some(b)) => Some(a.max(b)),
+        (Some(a), None)    => Some(a),
+        (None,    Some(b)) => Some(b),
+        (None,    None)    => None,
+    };
+    match (start, end) {
+        (Some(i), Some(j)) if i <= j => &s[i..=j],
+        _ => s,
+    }
+}
 
 fn is_speakable(s: &str) -> bool {
     let t = s.trim();
@@ -66,13 +97,16 @@ fn is_speakable(s: &str) -> bool {
 /// Returns the byte offset just past the first sentence-ending punctuation
 /// followed by a space or newline. Returns None if no boundary is found
 /// (including when punctuation is at end of buffer — wait for more tokens).
+/// Handles ASCII . ! ? and the Unicode ellipsis … (U+2026, 3 bytes).
 fn find_sentence_end(s: &str) -> Option<usize> {
-    let bytes = s.as_bytes();
-    for i in 0..bytes.len() {
-        if matches!(bytes[i], b'.' | b'!' | b'?') {
-            let next = i + 1;
-            if next < bytes.len() && (bytes[next] == b' ' || bytes[next] == b'\n') {
-                return Some(next);
+    let mut chars = s.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        if matches!(c, '.' | '!' | '?' | '…') {
+            let end = i + c.len_utf8();
+            match s.as_bytes().get(end) {
+                Some(&b' ') | Some(&b'\n') => return Some(end),
+                None => return None, // punctuation at end — wait for more data
+                _ => {}
             }
         }
     }
@@ -109,29 +143,36 @@ fn fallback_stage(content: &str, hint: &str) {
 
 // ── Shared staging logic (used by both Claude and Gemini paths) ───────────────
 async fn execute_staging(
-    items: Vec<(String, String)>,
+    items: Vec<(String, String, String)>,  // (intent, content, slug)
     companion_url: &str,
     app: &AppHandle,
 ) {
-    let deletes:  Vec<&(String, String)> = items.iter()
-        .filter(|(i, _)| i == "DELETE_STAGING")
+    let deletes: Vec<&(String, String, String)> = items.iter()
+        .filter(|(i, _, _)| i == "DELETE_STAGING")
         .collect();
-    let captures: Vec<&(String, String)> = items.iter()
-        .filter(|(i, _)| matches!(
+    let captures: Vec<&(String, String, String)> = items.iter()
+        .filter(|(i, _, _)| matches!(
             i.as_str(),
             "CAPTURE_IDEE" | "CAPTURE_PROJET" | "CAPTURE_CONCEPT" | "CAPTURE_PERSO" | "TACHE"
         ))
         .collect();
+    let agenda_adds: Vec<&(String, String, String)> = items.iter()
+        .filter(|(i, _, _)| i == "AGENDA_ADD")
+        .collect();
+    let agenda_queries: Vec<&(String, String, String)> = items.iter()
+        .filter(|(i, _, _)| i == "AGENDA_QUERY")
+        .collect();
+    // SEARCH_MEMORY: RAG already injected by fetch_rag_block at start of ask_claude/ask_gemini_stream
 
-    if deletes.is_empty() && captures.is_empty() {
-        eprintln!("[jarvis] classify: intent CONVERSATION, rien à stager");
+    if deletes.is_empty() && captures.is_empty() && agenda_adds.is_empty() && agenda_queries.is_empty() {
+        eprintln!("[jarvis] classify: intent CONVERSATION/SEARCH_MEMORY, rien à router");
         return;
     }
 
     if !deletes.is_empty() {
         let mut n_ok = 0usize;
         let mut last_deleted = String::new();
-        for (_, query) in &deletes {
+        for (_, query, _) in &deletes {
             eprintln!("[jarvis] classify: DELETE_STAGING query={query:?}");
             match http_client()
                 .post(format!("{companion_url}/delete_staging_by_content"))
@@ -161,6 +202,60 @@ async fn execute_staging(
         let _ = app.emit("claude-capture", toast);
     }
 
+    if !agenda_adds.is_empty() {
+        for (_, content, slug) in &agenda_adds {
+            eprintln!("[jarvis] classify: AGENDA_ADD date={slug:?} content={content:?}");
+            match http_client()
+                .post(format!("{companion_url}/agenda/add"))
+                .json(&serde_json::json!({"date": slug, "content": content}))
+                .send()
+                .await
+            {
+                Ok(resp) if resp.status().is_success() => {
+                    let _ = app.emit("claude-capture", format!("📅 {content}"));
+                }
+                Ok(resp) => eprintln!("[jarvis] AGENDA_ADD HTTP {}", resp.status()),
+                Err(e)   => eprintln!("[jarvis] AGENDA_ADD companion down: {e}"),
+            }
+        }
+    }
+
+    if !agenda_queries.is_empty() {
+        for (_, _, slug) in &agenda_queries {
+            let range = if slug.is_empty() { "aujourd'hui" } else { slug.as_str() };
+            eprintln!("[jarvis] classify: AGENDA_QUERY range={range:?}");
+            match http_client()
+                .get(format!("{companion_url}/agenda/query"))
+                .query(&[("range", range)])
+                .send()
+                .await
+            {
+                Ok(resp) if resp.status().is_success() => {
+                    match resp.json::<serde_json::Value>().await {
+                        Ok(body) => {
+                            let result = body.get("result").and_then(|r| r.as_str()).unwrap_or("").trim();
+                            if !result.is_empty() {
+                                // Display in conversation area
+                                let _ = app.emit("claude-token", format!("\n\n{result}"));
+                                // TTS-friendly version: strip emojis and bullets
+                                let tts = result
+                                    .replace("📅 ", "")
+                                    .replace("• ", "")
+                                    .replace(" | ", ", ");
+                                let _ = app.emit("claude-sentence", tts);
+                            } else {
+                                let _ = app.emit("claude-sentence", "Aucun rendez-vous.".to_string());
+                            }
+                        }
+                        Err(e) => eprintln!("[jarvis] AGENDA_QUERY parse error: {e}"),
+                    }
+                }
+                Ok(resp) => eprintln!("[jarvis] AGENDA_QUERY HTTP {}", resp.status()),
+                Err(e)   => eprintln!("[jarvis] AGENDA_QUERY companion down: {e}"),
+            }
+        }
+    }
+
     if !captures.is_empty() {
         let toast = if captures.len() == 1 {
             if captures[0].0 == "TACHE" { "📋 tâche".to_string() } else { "💡 noté".to_string() }
@@ -169,16 +264,12 @@ async fn execute_staging(
         };
         let _ = app.emit("claude-capture", toast);
 
-        for (intent, content) in &captures {
-            let (endpoint, payload) = {
-                // All capture types (including TACHE) go to /stage so they appear in the
-                // FloatingCards UI. confirm_staging_item routes TACHE → /task on user confirm.
-                ("/stage", serde_json::json!({"content": content, "hint": intent}))
-            };
-
+        for (intent, content, _) in &captures {
+            // All capture types (including TACHE) go to /stage so they appear in the
+            // FloatingCards UI. confirm_staging_item routes TACHE → /task on user confirm.
             let http_result = http_client()
-                .post(format!("{companion_url}{endpoint}"))
-                .json(&payload)
+                .post(format!("{companion_url}/stage"))
+                .json(&serde_json::json!({"content": content, "hint": intent}))
                 .send()
                 .await;
 
@@ -197,16 +288,31 @@ async fn execute_staging(
     }
 }
 
+fn current_date_ctx() -> String {
+    let now = chrono::Local::now();
+    let day = match now.weekday() {
+        chrono::Weekday::Mon => "lundi",
+        chrono::Weekday::Tue => "mardi",
+        chrono::Weekday::Wed => "mercredi",
+        chrono::Weekday::Thu => "jeudi",
+        chrono::Weekday::Fri => "vendredi",
+        chrono::Weekday::Sat => "samedi",
+        chrono::Weekday::Sun => "dimanche",
+    };
+    format!("[Aujourd'hui : {}, {}]\n", now.format("%Y-%m-%d"), day)
+}
+
 // ── Haiku classification (LLM_PROVIDER=claude) ────────────────────────────────
 async fn classify_and_stage(text: String, api_key: String, app: AppHandle) {
     eprintln!("[jarvis] classify_and_stage(haiku): text={:?}", text.chars().take(60).collect::<String>());
     if text.is_empty() { return; }
 
+    let msg = format!("{}{}", current_date_ctx(), text);
     let body = serde_json::json!({
         "model":      "claude-haiku-4-5-20251001",
         "max_tokens": 400,
         "system": [{"type": "text", "text": CLASSIFY_SYSTEM, "cache_control": {"type": "ephemeral"}}],
-        "messages": [{"role": "user", "content": &text}],
+        "messages": [{"role": "user", "content": &msg}],
     });
 
     let resp = match http_client()
@@ -246,11 +352,12 @@ async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle
     eprintln!("[jarvis] classify_and_stage(gemini): text={:?}", text.chars().take(60).collect::<String>());
     if text.is_empty() { return; }
 
+    let msg = format!("{}{}", current_date_ctx(), text);
     let body = serde_json::json!({
         "system_instruction": {
             "parts": [{"text": CLASSIFY_SYSTEM}]
         },
-        "contents": [{"role": "user", "parts": [{"text": &text}]}],
+        "contents": [{"role": "user", "parts": [{"text": &msg}]}],
         "generationConfig": {"maxOutputTokens": 400}
     });
 
@@ -292,19 +399,15 @@ async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle
 }
 
 // ── Parse classification JSON (shared) ───────────────────────────────────────
-fn parse_classify_response(raw: &str, fallback_text: &str) -> Vec<(String, String)> {
-    let cleaned = raw
-        .trim()
-        .trim_start_matches("```json")
-        .trim_start_matches("```")
-        .trim_end_matches("```")
-        .trim();
+// Returns Vec<(intent, content, slug)>
+fn parse_classify_response(raw: &str, fallback_text: &str) -> Vec<(String, String, String)> {
+    let cleaned = strip_code_fence(raw);
 
     let classified: serde_json::Value = match serde_json::from_str(cleaned) {
         Ok(j)  => j,
         Err(e) => {
             eprintln!("[jarvis] classify: JSON parse failed — raw={raw:?} err={e}");
-            return vec![];
+            return vec![("CONVERSATION".to_string(), fallback_text.to_string(), "".to_string())];
         }
     };
 
@@ -313,7 +416,8 @@ fn parse_classify_response(raw: &str, fallback_text: &str) -> Vec<(String, Strin
             .filter_map(|item| {
                 let intent  = item.get("intent")?.as_str()?.to_string();
                 let content = item.get("content")?.as_str()?.to_string();
-                Some((intent, content))
+                let slug    = item.get("slug").and_then(|v| v.as_str()).unwrap_or("").to_string();
+                Some((intent, content, slug))
             })
             .collect()
     } else {
@@ -321,7 +425,8 @@ fn parse_classify_response(raw: &str, fallback_text: &str) -> Vec<(String, Strin
                           .unwrap_or("CONVERSATION").to_string();
         let content = classified.get("content").and_then(|v| v.as_str())
                           .unwrap_or(fallback_text).to_string();
-        vec![(intent, content)]
+        let slug    = classified.get("slug").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        vec![(intent, content, slug)]
     }
 }
 
@@ -358,15 +463,13 @@ section = \"user\" pour préférences/infos personnelles sur l'utilisateur.\n\
 section = \"memory\" pour projets, décisions, idées importantes, concepts.\n\n";
 
 async fn stage_memory_items(raw: &str, companion_url: &str) {
-    let cleaned = raw.trim()
-        .trim_start_matches("```json")
-        .trim_start_matches("```")
-        .trim_end_matches("```")
-        .trim();
+    eprintln!("[jarvis] extract_memory: raw={raw:?}");
+    let cleaned = strip_code_fence(raw);
+    eprintln!("[jarvis] extract_memory: cleaned={cleaned:?}");
 
     let items = match serde_json::from_str::<serde_json::Value>(cleaned) {
         Ok(serde_json::Value::Array(arr)) => arr,
-        _ => { eprintln!("[jarvis] extract_memory: JSON invalide — raw={raw:?}"); return; }
+        _ => { eprintln!("[jarvis] extract_memory: JSON invalide après stripping"); return; }
     };
 
     if items.is_empty() {
@@ -437,13 +540,16 @@ async fn extract_and_stage_memory_gemini(
 ) {
     if assistant_text.trim().len() < 30 { return; }
 
-    let prompt = format!(
-        "{}USER: {}\n\nASSISTANT: {}",
-        MEMORY_EXTRACT_PROMPT, user_text, assistant_text
-    );
+    let conversation = format!("USER: {}\n\nASSISTANT: {}", user_text, assistant_text);
+    // Non-streaming generateContent — identical pattern to classify_and_stage_gemini.
+    // system_instruction carries the prompt so the model focuses tokens on JSON output.
+    // maxOutputTokens=600 leaves room for multi-item arrays without hitting MAX_TOKENS.
     let body = serde_json::json!({
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 300}
+        "system_instruction": {
+            "parts": [{"text": MEMORY_EXTRACT_PROMPT}]
+        },
+        "contents": [{"role": "user", "parts": [{"text": conversation}]}],
+        "generationConfig": {"maxOutputTokens": 600}
     });
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={}",
@@ -457,13 +563,14 @@ async fn extract_and_stage_memory_gemini(
         .await
     {
         Ok(r)  => r,
-        Err(e) => { eprintln!("[jarvis] extract_memory(gemini): {e}"); return; }
+        Err(e) => { eprintln!("[jarvis] extract_memory(gemini): request failed: {e}"); return; }
     };
     let json: serde_json::Value = match resp.json().await {
         Ok(j)  => j,
         Err(e) => { eprintln!("[jarvis] extract_memory(gemini): parse failed: {e}"); return; }
     };
-    let raw = match json.get("candidates").and_then(|c| c.get(0))
+    let raw = match json
+        .get("candidates").and_then(|c| c.get(0))
         .and_then(|c| c.get("content"))
         .and_then(|c| c.get("parts")).and_then(|p| p.get(0))
         .and_then(|p| p.get("text")).and_then(|t| t.as_str())
@@ -568,9 +675,11 @@ async fn ask_claude_stream(
                 if !remaining.is_empty() && is_speakable(&remaining) {
                     app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
                 }
+                // Classify first — it may emit claude-sentence (AGENDA_QUERY) while TTS is open.
+                // claude-done closes the TTS pipeline, so it must come after.
+                eprintln!("[jarvis] ask_claude: message_stop — classify, then claude-done");
+                classify_and_stage(user_text.clone(), api_key.clone(), app.clone()).await;
                 app.emit("claude-done", ()).map_err(|e| e.to_string())?;
-                eprintln!("[jarvis] ask_claude: message_stop — spawn classify + extract_memory");
-                tokio::spawn(classify_and_stage(user_text.clone(), api_key.clone(), app.clone()));
                 tokio::spawn(extract_and_stage_memory_claude(
                     user_text.clone(), full_assistant.clone(), companion_url.clone(), api_key.clone(),
                 ));
@@ -586,8 +695,8 @@ async fn ask_claude_stream(
         }
         app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
     }
+    classify_and_stage(user_text.clone(), api_key.clone(), app.clone()).await;
     app.emit("claude-done", ()).map_err(|e| e.to_string())?;
-    tokio::spawn(classify_and_stage(user_text.clone(), api_key.clone(), app.clone()));
     tokio::spawn(extract_and_stage_memory_claude(user_text, full_assistant, companion_url, api_key));
     Ok(())
 }
@@ -650,15 +759,20 @@ async fn ask_gemini_stream(
     }
 
     let mut stream = response.bytes_stream();
-    let mut sentence_buf   = String::new();
+    let mut line_buf      = String::new(); // accumulates bytes across HTTP chunks
+    let mut sentence_buf  = String::new();
     let mut full_assistant = String::new();
     let mut first_sentence = true;
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| e.to_string())?;
-        let text = String::from_utf8_lossy(&chunk);
+        line_buf.push_str(&String::from_utf8_lossy(&chunk));
 
-        for line in text.lines() {
+        // Only process complete lines; partial lines stay in line_buf for the next chunk.
+        while let Some(newline_pos) = line_buf.find('\n') {
+            let line = line_buf[..newline_pos].trim_end_matches('\r').to_string();
+            line_buf.drain(..=newline_pos);
+
             let Some(data) = line.strip_prefix("data: ") else { continue };
             let Ok(json) = serde_json::from_str::<serde_json::Value>(data) else { continue };
 
@@ -687,7 +801,27 @@ async fn ask_gemini_stream(
         }
     }
 
-    // Flush remaining buffer (Gemini stream closes naturally at finishReason=STOP)
+    // Process any final SSE line left in line_buf (last chunk may lack trailing \n).
+    if !line_buf.is_empty() {
+        let line = line_buf.trim_end_matches(|c: char| c == '\r' || c == '\n');
+        if let Some(data) = line.strip_prefix("data: ") {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                if let Some(token) = json
+                    .get("candidates").and_then(|c| c.get(0))
+                    .and_then(|c| c.get("content"))
+                    .and_then(|c| c.get("parts")).and_then(|p| p.get(0))
+                    .and_then(|p| p.get("text")).and_then(|t| t.as_str())
+                {
+                    let _ = app.emit("claude-token", token);
+                    sentence_buf.push_str(token);
+                    full_assistant.push_str(token);
+                }
+            }
+        }
+    }
+
+    // Flush: emit everything remaining regardless of length — this is the last phrase
+    // of the stream, complete even without trailing punctuation+space.
     let remaining = sentence_buf.trim().to_string();
     if !remaining.is_empty() && is_speakable(&remaining) {
         if first_sentence {
@@ -695,9 +829,10 @@ async fn ask_gemini_stream(
         }
         app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
     }
+    // Classify first — it may emit claude-sentence (AGENDA_QUERY) while TTS is open.
+    eprintln!("[jarvis] ask_gemini: done — classify, then claude-done");
+    classify_and_stage_gemini(user_text.clone(), api_key.clone(), app.clone()).await;
     app.emit("claude-done", ()).map_err(|e| e.to_string())?;
-    eprintln!("[jarvis] ask_gemini: done — spawn classify + extract_memory");
-    tokio::spawn(classify_and_stage_gemini(user_text.clone(), api_key.clone(), app.clone()));
     tokio::spawn(extract_and_stage_memory_gemini(user_text, full_assistant, companion_url, api_key));
     Ok(())
 }

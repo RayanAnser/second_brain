@@ -24,7 +24,10 @@ pub fn run() {
                     use windows::Win32::Foundation::HWND;
                     use windows::Win32::Graphics::Dwm::DwmExtendFrameIntoClientArea;
                     use windows::Win32::UI::Controls::MARGINS;
-                    let hwnd = HWND(win.hwnd().unwrap().0 as _);
+                    let hwnd = match win.hwnd() {
+                        Ok(h)  => HWND(h.0 as _),
+                        Err(e) => { eprintln!("[jarvis] DWM setup failed: {:?}", e); return Ok(()); }
+                    };
                     let margins = MARGINS { cxLeftWidth: -1, cxRightWidth: -1, cyTopHeight: -1, cyBottomHeight: -1 };
                     unsafe { let _ = DwmExtendFrameIntoClientArea(hwnd, &margins); }
                 }

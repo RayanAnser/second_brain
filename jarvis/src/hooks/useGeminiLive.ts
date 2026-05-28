@@ -35,12 +35,16 @@ function stripMarkdown(text: string): string {
     .replace(/\*([^*]+)\*/g, "$1")
     .replace(/__([^_]+)__/g, "$1")
     .replace(/_([^_]+)_/g, "$1")
+    .replace(/~~([^~]+)~~/g, "$1")
     .replace(/^#{1,6}\s+/gm, "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/https?:\/\/\S+/g, "")
     .replace(/^[-*+]\s+/gm, "")
     .replace(/^\d+\.\s+/gm, "")
     .replace(/^>\s*/gm, "")
+    .replace(/^\s*[-*_]{3,}\s*$/gm, "")
+    .replace(/\|[^\n|]*\|/g, "")
+    .replace(/&[a-zA-Z]+;|&#\d+;/g, "")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
@@ -94,6 +98,10 @@ export function useGeminiLive() {
     console.log("[jarvis] speakSentence: appelé —", JSON.stringify(clean.slice(0, 60)), `(${clean.length} chars)`);
     if (clean.length <= 3) {
       console.log("[jarvis] speakSentence: trop court, ignoré");
+      return;
+    }
+    if (!/[a-zA-ZÀ-ÿ0-9]/.test(clean)) {
+      console.log("[jarvis] speakSentence: aucun contenu lisible, ignoré");
       return;
     }
 
@@ -215,6 +223,7 @@ export function useGeminiLive() {
     });
     const p2 = listen<void>("claude-done", () => {
       if (!acceptSentencesRef.current) return;
+      acceptSentencesRef.current = false;
       console.log("[jarvis] claude-done reçu → finishSpeaking");
       finishSpeaking();
     });
@@ -308,9 +317,9 @@ export function useGeminiLive() {
 
         acceptSentencesRef.current = true;
         await invoke("ask_claude", { messages: history, systemPrompt });
-        acceptSentencesRef.current = false;
       } catch (err) {
         console.error("[jarvis] useGeminiLive error:", err);
+        acceptSentencesRef.current = false;
         setIsThinking(false);
       }
     };

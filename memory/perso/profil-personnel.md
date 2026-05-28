@@ -38,3 +38,5 @@ Deux cercles dans le "groupe" :
 - Maya est franco-américaine  _(jarvis, 2026-05-27)_
 - Maya vient du New Jersey  _(jarvis, 2026-05-27)_
 - Maya est très belle  _(jarvis, 2026-05-27)_
+- au foot je joue du pied droit  _(jarvis, 2026-05-28)_
+- A un rendez-vous chez le dentiste et chez le podologue mardi 7 juin.  _(jarvis, 2026-05-28)_

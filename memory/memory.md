@@ -64,3 +64,7 @@
 - acheter ketchup et mayonnaise
 - acheter du pain
 - acheter de l'huile d'olive
+
+## Mémoire auto
+- Rendez-vous avec Ségolène fixé au mardi 9 juin à 17h.  _(jarvis, 2026-05-28)_
+- Le prochain rendez-vous est avec Ség.  _(jarvis, 2026-05-28)_
