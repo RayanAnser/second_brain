@@ -30,8 +30,8 @@
 | 2026-05-22 | Effacer/modifier des parties des fichiers capturés (idées périmées) | Compagnon IA |
 | 2026-05-22 | Monitoring consommation API/tokens | Compagnon IA |
 | 2026-05-22 | Améliorer classification intentions : trop de CAPTURE au lieu de CONVERSATION | Compagnon IA |
-
----
+| 2026-05-27 | Inviter quelqu'un en disant 'ça me ferait plaisir de' au lieu de 'si' | Personnel |
+| 2026-05-28 | Faire un site journalistique | Projet |
 
 ## 🟢 Décisions prises
 - Architecture mémoire : Obsidian + fichiers Markdown locaux (pas Notion pour le core)
