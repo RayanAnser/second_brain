@@ -64,6 +64,8 @@
 - acheter ketchup et mayonnaise
 - acheter du pain
 - acheter de l'huile d'olive
+- Rendez-vous coiffeur jeudi 5 juin à 14h
+- Rendez-vous Navigo le 12 juin à 21h
 
 ## Mémoire auto
 - Rendez-vous avec Ségolène fixé au mardi 9 juin à 17h.  _(jarvis, 2026-05-28)_
