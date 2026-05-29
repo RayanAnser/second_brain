@@ -41,3 +41,4 @@
 - Marina : Psychiatre. Amie du lycée.
 - Laure : Docteur en pharmacie. Amie du lycée.
 - Plotine : Pâtissière dans un hôtel en Bretagne. Amie du lycée.
+- Charles : Copain de Sacha.
