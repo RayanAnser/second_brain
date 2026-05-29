@@ -43,6 +43,9 @@ Deux cercles dans le "groupe" :
 
 
 ## Connaissances d'Avignon
-- Alice : Product Designer
-- Sacha : Customer Success Manager
-- Paul : Comédien (fait un film)
+- Alice : Product Designer. Amie du lycée.
+- Sacha : Customer Success Manager. Ami du lycée.
+- Paul : Comédien (fait un film). Ami du lycée.
+- Marina : Psychiatre. Amie du lycée.
+- Laure : Docteur en pharmacie. Amie du lycée.
+- Plotine : Pâtissière dans un hôtel en Bretagne. Amie du lycée.
