@@ -40,3 +40,9 @@ Deux cercles dans le "groupe" :
 - Maya est très belle  _(jarvis, 2026-05-27)_
 - au foot je joue du pied droit  _(jarvis, 2026-05-28)_
 - A un rendez-vous chez le dentiste et chez le podologue mardi 7 juin.  _(jarvis, 2026-05-28)_
+
+
+## Connaissances d'Avignon
+- Alice : Product Designer
+- Sacha : Customer Success Manager
+- Paul : Comédien (fait un film)
