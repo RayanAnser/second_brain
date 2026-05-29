@@ -20,6 +20,7 @@ from pathlib import Path
 os.environ.setdefault("PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION", "python")
 os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
 
+import httpx
 import requests
 
 from dotenv import load_dotenv
@@ -114,6 +115,10 @@ MEMORY_ACTIVE_MAX   = 6000
 # ── Clients ──────────────────────────────────────────────────────────────────
 claude = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 groq   = Groq(api_key=GROQ_KEY)
+
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "claude").lower()
+GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
+_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash"
 
 # ── State ────────────────────────────────────────────────────────────────────
 conversations:       dict[int, list] = {}  # historique par user
@@ -296,19 +301,20 @@ def _log_api_call(response, function: str) -> None:
 
 async def extract_user_update(request: str) -> str:
     current = USER_MD.read_text() if USER_MD.exists() else "(vide)"
+    _UPDATE_SYSTEM = (
+        "Tu mets à jour un profil utilisateur en markdown.\n"
+        "Reçois : le contenu actuel de user.md et une demande de mise à jour.\n"
+        "Retourne UNIQUEMENT le bloc markdown à ajouter à la fin de user.md.\n"
+        "Pas de préambule, pas d'explication. Sois concis : une section courte ou quelques bullet points."
+    )
+    user_text = f"user.md actuel :\n\n{current}\n\nDemande : {request}"
+    if LLM_PROVIDER == "gemini":
+        return await _gemini_generate(_UPDATE_SYSTEM, user_text, 400)
     response = claude.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=400,
-        system=_cached_system(
-            "Tu mets à jour un profil utilisateur en markdown.\n"
-            "Reçois : le contenu actuel de user.md et une demande de mise à jour.\n"
-            "Retourne UNIQUEMENT le bloc markdown à ajouter à la fin de user.md.\n"
-            "Pas de préambule, pas d'explication. Sois concis : une section courte ou quelques bullet points."
-        ),
-        messages=[{
-            "role": "user",
-            "content": f"user.md actuel :\n\n{current}\n\nDemande : {request}",
-        }],
+        system=_cached_system(_UPDATE_SYSTEM),
+        messages=[{"role": "user", "content": user_text}],
     )
     _log_api_call(response, "extract_user_update")
     return response.content[0].text.strip()
@@ -538,14 +544,17 @@ async def save_intelligently(user_id: int) -> dict:
         user_content += staged_text + "\n\n"
     user_content += f"État actuel des fichiers mémoire :\n\n{build_memory_context()}"
 
-    response = claude.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=6000,
-        system=_cached_system(_SAVE_SYSTEM),
-        messages=[{"role": "user", "content": user_content}],
-    )
-    _log_api_call(response, "save_intelligently")
-    raw = response.content[0].text.strip()
+    if LLM_PROVIDER == "gemini":
+        raw = await _gemini_generate(_SAVE_SYSTEM, user_content, 6000)
+    else:
+        response = claude.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=6000,
+            system=_cached_system(_SAVE_SYSTEM),
+            messages=[{"role": "user", "content": user_content}],
+        )
+        _log_api_call(response, "save_intelligently")
+        raw = response.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
@@ -684,14 +693,21 @@ async def classify_intent(text: str) -> dict:
     now = datetime.now()
     date_ctx = f"[Aujourd'hui : {now.strftime('%Y-%m-%d')}, {_DAY_FR[now.weekday()]}]"
     try:
-        response = claude.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=500,
-            system=_cached_system(_INTENT_SYSTEM),
-            messages=[{"role": "user", "content": f"{date_ctx}\n{text}"}],
-        )
-        _log_api_call(response, "classify_intent")
-        raw = response.content[0].text.strip()
+        if LLM_PROVIDER == "gemini":
+            raw = await _gemini_generate(
+                _INTENT_SYSTEM,
+                f"{date_ctx}\n{text}",
+                500,
+            )
+        else:
+            response = claude.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=500,
+                system=_cached_system(_INTENT_SYSTEM),
+                messages=[{"role": "user", "content": f"{date_ctx}\n{text}"}],
+            )
+            _log_api_call(response, "classify_intent")
+            raw = response.content[0].text.strip()
         log.info(f"classify_intent raw={raw!r}")
         if raw.startswith("```"):
             raw = raw.split("```")[1]
@@ -1506,6 +1522,89 @@ async def _http_task(request):
         return aiohttp_web.Response(status=500, text=str(e))
 
 
+# ── Gemini helpers ───────────────────────────────────────────────────────────
+
+async def _gemini_generate(system: str, user_text: str, max_tokens: int) -> str:
+    """Non-streaming generateContent — retourne le texte brut de la réponse."""
+    url = f"{_GEMINI_BASE}:generateContent?key={GEMINI_KEY}"
+    body = {
+        "system_instruction": {"parts": [{"text": system}]},
+        "contents": [{"role": "user", "parts": [{"text": user_text}]}],
+        "generationConfig": {"maxOutputTokens": max_tokens},
+    }
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(url, json=body)
+        resp.raise_for_status()
+    data = resp.json()
+    return (
+        data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    )
+
+
+async def _ask_gemini(
+    user_message: str,
+    user_id: int,
+    extra_files: list[Path] = [],
+    context_injection: str = "",
+) -> str:
+    """Streaming SSE generateContent — accumule le texte complet et le retourne."""
+    history = conversations.setdefault(user_id, [])
+
+    base_system = build_system_prompt()
+
+    api_content = user_message
+    if extra_files:
+        parts = []
+        for path in extra_files:
+            if path.exists():
+                rel = path.relative_to(MEMORY_DIR.parent)
+                parts.append(f"<MEMORY_FILE path=\"{rel}\">\n{path.read_text()}\n</MEMORY_FILE>")
+        if parts:
+            api_content = "\n\n".join(parts) + "\n\n" + api_content
+    if context_injection:
+        api_content = context_injection + "\n\n" + api_content
+
+    history.append({"role": "user", "content": user_message})
+    session_logs.setdefault(user_id, []).append(f"USER : {user_message}")
+
+    # Gemini uses "model" instead of "assistant"
+    contents = []
+    for msg in list(history[:-1]) + [{"role": "user", "content": api_content}]:
+        role = "model" if msg["role"] == "assistant" else "user"
+        contents.append({"role": role, "parts": [{"text": msg["content"]}]})
+
+    url = f"{_GEMINI_BASE}:streamGenerateContent?alt=sse&key={GEMINI_KEY}"
+    body = {
+        "system_instruction": {"parts": [{"text": base_system}]},
+        "contents": contents,
+        "generationConfig": {"maxOutputTokens": 1024},
+    }
+
+    full_text = ""
+    async with httpx.AsyncClient(timeout=120) as client:
+        async with client.stream("POST", url, json=body) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                try:
+                    chunk = json.loads(data_str)
+                    token = (
+                        chunk.get("candidates", [{}])[0]
+                        .get("content", {})
+                        .get("parts", [{}])[0]
+                        .get("text", "")
+                    )
+                    full_text += token
+                except (json.JSONDecodeError, IndexError, KeyError):
+                    pass
+
+    history.append({"role": "assistant", "content": full_text})
+    session_logs[user_id].append(f"ASSISTANT : {full_text}")
+    return full_text
+
+
 # ── Claude conversation ──────────────────────────────────────────────────────
 
 async def ask_claude(
@@ -1514,6 +1613,9 @@ async def ask_claude(
     extra_files: list[Path] = [],
     context_injection: str = "",
 ) -> str:
+    if LLM_PROVIDER == "gemini":
+        return await _ask_gemini(user_message, user_id, extra_files, context_injection)
+
     history = conversations.setdefault(user_id, [])
 
     # System prompt stable (sans extra_files) — préserve le cache prompt.
