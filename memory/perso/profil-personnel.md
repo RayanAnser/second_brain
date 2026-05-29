@@ -13,16 +13,9 @@
 - Tante : Louisette
 
 ## Amis
-- Charles
 - Louis
 - Victor
 - Maxime (à Metz)
-
-**Contexte social récent (2026-05-23) :**
-Deux cercles dans le "groupe" :
-- **Noyau choisi** : Charles, Victor, Louis, Maxime (à Metz) — amis proches, motivations sociales principales
-
-**Observation :** Motivation principale pour voir ce groupe mixte = présence de Charles, Victor, Louis. Ils ont des activités/parcours similaires. Louis fait la même chose que Rayän concernant Charles et Victor (observation confirmée 2026-05-23).
 
 ## Relations sentimentales
 - Crush sur Maya (capturé le 2026-05-23 — première présentation aux amis ce jour)
