@@ -70,3 +70,5 @@
 ## Mémoire auto
 - Rendez-vous avec Ségolène fixé au mardi 9 juin à 17h.  _(jarvis, 2026-05-28)_
 - Le prochain rendez-vous est avec Ség.  _(jarvis, 2026-05-28)_
+
+- Test IST mercredi ou jeudi la semaine prochaine
