@@ -10,3 +10,4 @@
 - acheter des poireaux  _(2026-05-28)_
 - Acheter billets pour Metz  _(2026-05-29)_
 -   _(2026-05-29)_
+- Faire un résumé de l'ère du vide de Lipovetsky  _(2026-05-30)_
