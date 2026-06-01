@@ -12,7 +12,12 @@ const TTS_MODEL: &str = "eleven_v3";
 pub async fn synthesize_speech(text: String) -> Result<Vec<u8>, String> {
     let api_key = std::env::var("ELEVENLABS_API_KEY")
         .map_err(|_| "ELEVENLABS_API_KEY non défini".to_string())?;
-    let voice_id = std::env::var("ELEVENLABS_VOICE_ID")
+    let voice_id_result = std::env::var("ELEVENLABS_VOICE_ID");
+    eprintln!(
+        "[jarvis] synthesize_speech: ELEVENLABS_VOICE_ID raw = {:?}",
+        voice_id_result
+    );
+    let voice_id = voice_id_result
         .map_err(|_| "ELEVENLABS_VOICE_ID non défini".to_string())?;
 
     let url = format!(
@@ -21,7 +26,7 @@ pub async fn synthesize_speech(text: String) -> Result<Vec<u8>, String> {
     );
 
     eprintln!(
-        "[jarvis] synthesize_speech: → ElevenLabs {} voice={} — {:?} ({} chars)",
+        "[jarvis] synthesize_speech: → ElevenLabs {} voice={:?} — {:?} ({} chars)",
         TTS_MODEL,
         &voice_id,
         &text.chars().take(60).collect::<String>(),

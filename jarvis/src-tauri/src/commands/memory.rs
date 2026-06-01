@@ -9,8 +9,9 @@ fn http_client() -> &'static reqwest::Client {
 }
 
 fn memory_dir() -> PathBuf {
-    let val = std::env::var("MEMORY_DIR").unwrap_or_else(|_| "./memory".to_string());
-    eprintln!("[jarvis] MEMORY_DIR env = {:?}", val);
+    let raw = std::env::var("MEMORY_DIR");
+    eprintln!("[jarvis] MEMORY_DIR raw = {:?}", raw);
+    let val = raw.unwrap_or_else(|_| "./memory".to_string());
     let path = PathBuf::from(&val);
     eprintln!("[jarvis] memory_dir resolved = {:?}", path);
     path

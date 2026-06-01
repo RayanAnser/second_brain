@@ -3,13 +3,16 @@ mod commands;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     // Load .env from the directory next to the executable (works in dev and release)
-    let env_path = std::env::current_exe()
+    let exe_dir_env = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.join(".env")));
-    if let Some(path) = env_path {
-        dotenvy::from_path(path).ok();
+    eprintln!("[jarvis] .env exe-dir path = {:?}", exe_dir_env);
+    if let Some(ref path) = exe_dir_env {
+        let r = dotenvy::from_path(path);
+        eprintln!("[jarvis] dotenvy::from_path({:?}) = {:?}", path, r);
     }
-    dotenvy::dotenv().ok();
+    let r2 = dotenvy::dotenv();
+    eprintln!("[jarvis] dotenvy::dotenv() = {:?}", r2);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
