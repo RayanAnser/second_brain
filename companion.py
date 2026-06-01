@@ -118,7 +118,7 @@ groq   = Groq(api_key=GROQ_KEY)
 
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "claude").lower()
 GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
-_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash"
+_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash"
 
 # ── State ────────────────────────────────────────────────────────────────────
 conversations:       dict[int, list] = {}  # historique par user
@@ -1577,10 +1577,12 @@ async def _ask_gemini(
     body = {
         "system_instruction": {"parts": [{"text": base_system}]},
         "contents": contents,
-        "generationConfig": {"maxOutputTokens": 1024},
+        "generationConfig": {"maxOutputTokens": 2048},
     }
 
     full_text = ""
+    chunk_count = 0
+    last_finish_reason = ""
     async with httpx.AsyncClient(timeout=120) as client:
         async with client.stream("POST", url, json=body) as resp:
             resp.raise_for_status()
@@ -1590,8 +1592,13 @@ async def _ask_gemini(
                 data_str = line[6:]
                 try:
                     chunk = json.loads(data_str)
+                    chunk_count += 1
+                    candidate = chunk.get("candidates", [{}])[0]
+                    reason = candidate.get("finishReason", "")
+                    if reason:
+                        last_finish_reason = reason
                     token = (
-                        chunk.get("candidates", [{}])[0]
+                        candidate
                         .get("content", {})
                         .get("parts", [{}])[0]
                         .get("text", "")
@@ -1599,6 +1606,7 @@ async def _ask_gemini(
                     full_text += token
                 except (json.JSONDecodeError, IndexError, KeyError):
                     pass
+    log.info(f"[ask_gemini] chunks={chunk_count} finishReason={last_finish_reason!r} len={len(full_text)}")
 
     history.append({"role": "assistant", "content": full_text})
     session_logs[user_id].append(f"ASSISTANT : {full_text}")

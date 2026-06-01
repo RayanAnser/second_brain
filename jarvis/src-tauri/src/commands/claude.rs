@@ -21,7 +21,7 @@ const VOCAL_INSTRUCTION: &str = "\n\nTu es en mode vocal. Réponds en 1-3 phrase
 const CLASSIFY_SYSTEM: &str = "\
 Classifie le message utilisateur. Retourne UNIQUEMENT du JSON valide, sans texte autour.\n\
 Intentions : CAPTURE_IDEE, CAPTURE_PROJET, CAPTURE_CONCEPT, CAPTURE_PERSO, TACHE,\n\
-             AGENDA_ADD, AGENDA_QUERY, SEARCH_MEMORY, DELETE_STAGING, CONVERSATION.\n\
+             AGENDA_ADD, AGENDA_QUERY, SEARCH_MEMORY, DELETE_STAGING, SCREEN_READ, CONVERSATION.\n\
 \n\
 DISTINCTION CRITIQUE — TACHE vs CAPTURE_IDEE :\n\
 TACHE = action concrète et immédiate avec un verbe d'action (acheter, appeler, envoyer, faire, vérifier, prendre rdv).\n\
@@ -59,6 +59,9 @@ Règles pour content :\n\
 \n\
 Format par défaut (un seul sujet) : {\"intent\": \"...\", \"slug\": \"...\", \"content\": \"version épurée, concise\"}\n\
 Pour CAPTURE_*, TACHE, DELETE_STAGING, CONVERSATION : slug = \"\".\n\
+\n\
+SCREEN_READ = l'utilisateur veut que Jarvis analyse son écran (\"regarde mon écran\", \"qu'est-ce que tu vois\", \"analyse mon écran\", \"c'est quoi ça\").\n\
+  slug = \"\". content = question reformulée en français.\n\
 \n\
 DELETE_STAGING : supprimer une capture en attente (ex: \"supprime X\", \"enlève X\", \"retire ça\").\n\
 - content = nom exact de la capture à chercher, un seul nom par objet.\n\
@@ -111,6 +114,43 @@ fn find_sentence_end(s: &str) -> Option<usize> {
         }
     }
     None
+}
+
+/// Like find_sentence_end but treats punctuation at end-of-string as a valid
+/// boundary. Use only on complete (post-stream) text.
+fn find_sentence_end_complete(s: &str) -> Option<usize> {
+    for (i, c) in s.char_indices() {
+        if matches!(c, '.' | '!' | '?' | '…') {
+            let end = i + c.len_utf8();
+            match s.as_bytes().get(end) {
+                Some(&b' ') | Some(&b'\n') => return Some(end),
+                None => return Some(end),
+                _ => {}
+            }
+        }
+    }
+    None
+}
+
+/// Split a complete response string into TTS-ready sentences.
+fn split_sentences(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut buf = text.trim().to_string();
+    loop {
+        match find_sentence_end_complete(&buf) {
+            Some(boundary) => {
+                let s = buf[..boundary].trim().to_string();
+                buf = buf[boundary..].trim_start().to_string();
+                if s.len() > 3 && is_speakable(&s) { out.push(s); }
+            }
+            None => {
+                let tail = buf.trim().to_string();
+                if tail.len() > 3 && is_speakable(&tail) { out.push(tail); }
+                break;
+            }
+        }
+    }
+    out
 }
 
 fn fallback_stage(content: &str, hint: &str) {
@@ -362,7 +402,7 @@ async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle
     });
 
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={}",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={}",
         api_key
     );
 
@@ -552,7 +592,7 @@ async fn extract_and_stage_memory_gemini(
         "generationConfig": {"maxOutputTokens": 600}
     });
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={}",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={}",
         api_key
     );
     let resp = match http_client()
@@ -633,6 +673,7 @@ async fn ask_claude_stream(
     }
 
     let mut stream = response.bytes_stream();
+    let mut line_buf       = String::new(); // accumulates bytes across HTTP chunks (fix: text.lines() lost tokens at chunk boundaries)
     let mut sentence_buf   = String::new();
     let mut full_assistant = String::new();
     let mut first_sentence = true;
@@ -640,8 +681,16 @@ async fn ask_claude_stream(
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| e.to_string())?;
         let text  = String::from_utf8_lossy(&chunk);
+        eprintln!("[stream] chunk raw: {:?}", text.chars().take(100).collect::<String>());
 
-        for line in text.lines() {
+        line_buf.push_str(&text);
+        eprintln!("[stream] line_buf before: {:?}", line_buf.chars().take(100).collect::<String>());
+
+        while let Some(newline_pos) = line_buf.find('\n') {
+            let line = line_buf[..newline_pos].trim_end_matches('\r').to_string();
+            line_buf.drain(..=newline_pos);
+            eprintln!("[stream] line_buf after: {:?}", line_buf.chars().take(100).collect::<String>());
+
             let Some(data) = line.strip_prefix("data: ") else { continue };
             if data == "[DONE]" { break; }
             let Ok(json) = serde_json::from_str::<serde_json::Value>(data) else { continue };
@@ -655,11 +704,14 @@ async fn ask_claude_stream(
                     app.emit("claude-token", token).map_err(|e| e.to_string())?;
                     sentence_buf.push_str(token);
                     full_assistant.push_str(token);
+                    eprintln!("[stream] sentence_buf += {:?} → {:?}", token, sentence_buf.chars().take(100).collect::<String>());
 
                     while let Some(boundary) = find_sentence_end(&sentence_buf) {
+                        eprintln!("[stream] find_sentence_end: boundary={} in {:?}", boundary, sentence_buf.chars().take(100).collect::<String>());
                         let sentence = sentence_buf[..boundary].trim().to_string();
                         sentence_buf = sentence_buf[boundary..].trim_start().to_string();
                         if sentence.len() > 3 && is_speakable(&sentence) {
+                            eprintln!("[stream] sentence_buf emit: {:?}", sentence);
                             if first_sentence {
                                 eprintln!("[timing] claude-ttft: {}ms", t1.elapsed().as_millis());
                                 first_sentence = false;
@@ -667,11 +719,15 @@ async fn ask_claude_stream(
                             app.emit("claude-sentence", sentence).map_err(|e| e.to_string())?;
                         }
                     }
+                    if !sentence_buf.is_empty() {
+                        eprintln!("[stream] find_sentence_end: no boundary in {:?}", sentence_buf.chars().take(100).collect::<String>());
+                    }
                 }
             }
 
             if json.get("type").and_then(|t| t.as_str()) == Some("message_stop") {
                 let remaining = sentence_buf.trim().to_string();
+                eprintln!("[stream] flush final: {:?}", remaining);
                 if !remaining.is_empty() && is_speakable(&remaining) {
                     app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
                 }
@@ -689,6 +745,7 @@ async fn ask_claude_stream(
     }
 
     let remaining = sentence_buf.trim().to_string();
+    eprintln!("[stream] flush final (stream end): {:?}", remaining);
     if !remaining.is_empty() && is_speakable(&remaining) {
         if first_sentence {
             eprintln!("[timing] claude-ttft: {}ms", t1.elapsed().as_millis());
@@ -733,11 +790,11 @@ async fn ask_gemini_stream(
             "parts": [{"text": full_system}]
         },
         "contents": contents,
-        "generationConfig": {"maxOutputTokens": 256}
+        "generationConfig": {"maxOutputTokens": 2048}
     });
 
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:streamGenerateContent?alt=sse&key={}",
+        "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:streamGenerateContent?alt=sse&key={}",
         api_key
     );
 
@@ -758,23 +815,30 @@ async fn ask_gemini_stream(
         return Err(format!("Erreur API Gemini : {}", err));
     }
 
-    let mut stream = response.bytes_stream();
-    let mut line_buf      = String::new(); // accumulates bytes across HTTP chunks
-    let mut sentence_buf  = String::new();
+    let mut stream         = response.bytes_stream();
+    let mut line_buf       = String::new();
     let mut full_assistant = String::new();
-    let mut first_sentence = true;
+    let mut chunk_count    = 0usize;
+    let mut last_finish_reason = String::new();
 
     while let Some(chunk) = stream.next().await {
         let chunk = chunk.map_err(|e| e.to_string())?;
         line_buf.push_str(&String::from_utf8_lossy(&chunk));
 
-        // Only process complete lines; partial lines stay in line_buf for the next chunk.
         while let Some(newline_pos) = line_buf.find('\n') {
             let line = line_buf[..newline_pos].trim_end_matches('\r').to_string();
             line_buf.drain(..=newline_pos);
 
             let Some(data) = line.strip_prefix("data: ") else { continue };
             let Ok(json) = serde_json::from_str::<serde_json::Value>(data) else { continue };
+
+            chunk_count += 1;
+            if let Some(reason) = json
+                .get("candidates").and_then(|c| c.get(0))
+                .and_then(|c| c.get("finishReason")).and_then(|r| r.as_str())
+            {
+                last_finish_reason = reason.to_string();
+            }
 
             if let Some(token) = json
                 .get("candidates").and_then(|c| c.get(0))
@@ -783,29 +847,23 @@ async fn ask_gemini_stream(
                 .and_then(|p| p.get("text")).and_then(|t| t.as_str())
             {
                 app.emit("claude-token", token).map_err(|e| e.to_string())?;
-                sentence_buf.push_str(token);
                 full_assistant.push_str(token);
-
-                while let Some(boundary) = find_sentence_end(&sentence_buf) {
-                    let sentence = sentence_buf[..boundary].trim().to_string();
-                    sentence_buf = sentence_buf[boundary..].trim_start().to_string();
-                    if sentence.len() > 3 && is_speakable(&sentence) {
-                        if first_sentence {
-                            eprintln!("[timing] gemini-ttft: {}ms", t1.elapsed().as_millis());
-                            first_sentence = false;
-                        }
-                        app.emit("claude-sentence", sentence).map_err(|e| e.to_string())?;
-                    }
-                }
             }
         }
     }
 
-    // Process any final SSE line left in line_buf (last chunk may lack trailing \n).
+    // Flush any partial SSE line that didn't end with \n
     if !line_buf.is_empty() {
         let line = line_buf.trim_end_matches(|c: char| c == '\r' || c == '\n');
         if let Some(data) = line.strip_prefix("data: ") {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+                chunk_count += 1;
+                if let Some(reason) = json
+                    .get("candidates").and_then(|c| c.get(0))
+                    .and_then(|c| c.get("finishReason")).and_then(|r| r.as_str())
+                {
+                    last_finish_reason = reason.to_string();
+                }
                 if let Some(token) = json
                     .get("candidates").and_then(|c| c.get(0))
                     .and_then(|c| c.get("content"))
@@ -813,24 +871,22 @@ async fn ask_gemini_stream(
                     .and_then(|p| p.get("text")).and_then(|t| t.as_str())
                 {
                     let _ = app.emit("claude-token", token);
-                    sentence_buf.push_str(token);
                     full_assistant.push_str(token);
                 }
             }
         }
     }
 
-    // Flush: emit everything remaining regardless of length — this is the last phrase
-    // of the stream, complete even without trailing punctuation+space.
-    let remaining = sentence_buf.trim().to_string();
-    if !remaining.is_empty() && is_speakable(&remaining) {
-        if first_sentence {
-            eprintln!("[timing] gemini-ttft: {}ms", t1.elapsed().as_millis());
-        }
-        app.emit("claude-sentence", remaining).map_err(|e| e.to_string())?;
+    eprintln!("[timing] ask_gemini: stream done in {}ms", t1.elapsed().as_millis());
+    eprintln!("[jarvis] ask_gemini: chunks={chunk_count} finishReason={last_finish_reason:?} full_response={:?}", full_assistant.chars().take(200).collect::<String>());
+
+    let sentences = split_sentences(&full_assistant);
+    eprintln!("[jarvis] ask_gemini: {} phrase(s) TTS", sentences.len());
+    for sentence in &sentences {
+        eprintln!("[jarvis] ask_gemini: emit {:?}", sentence);
+        app.emit("claude-sentence", sentence).map_err(|e| e.to_string())?;
     }
-    // Classify first — it may emit claude-sentence (AGENDA_QUERY) while TTS is open.
-    eprintln!("[jarvis] ask_gemini: done — classify, then claude-done");
+
     classify_and_stage_gemini(user_text.clone(), api_key.clone(), app.clone()).await;
     app.emit("claude-done", ()).map_err(|e| e.to_string())?;
     tokio::spawn(extract_and_stage_memory_gemini(user_text, full_assistant, companion_url, api_key));
@@ -846,6 +902,12 @@ pub async fn ask_claude(
 ) -> Result<(), String> {
     let provider = std::env::var("LLM_PROVIDER").unwrap_or_else(|_| "claude".to_string());
     eprintln!("[jarvis] ask_claude: LLM_PROVIDER={provider}");
+
+    let user_text = messages.last().map(|m| m.content.clone()).unwrap_or_default();
+    if super::screen::is_screen_read(&user_text) {
+        eprintln!("[jarvis] ask_claude: SCREEN_READ détecté → screenshot_and_analyze");
+        return super::screen::screenshot_and_analyze_inner(app, user_text, system_prompt).await;
+    }
 
     match provider.to_lowercase().as_str() {
         "gemini" => ask_gemini_stream(app, messages, system_prompt).await,

@@ -62,6 +62,7 @@ pub fn run() {
             commands::memory::debug_memory,
             commands::gemini_live::transcribe_gemini,
             commands::claude::ask_claude,
+            commands::screen::screenshot_and_analyze,
             commands::gemini_tts::synthesize_speech,
             commands::widgets::read_widgets_context,
             commands::window::set_window_compact,

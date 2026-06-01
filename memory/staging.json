@@ -21,6 +21,30 @@
       "hint": "MEMORY",
       "timestamp": "2026-05-28 22:29",
       "section": "user"
+    },
+    {
+      "content": "Jarvis n'a pas accès à l'écran de l'utilisateur.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 20:40",
+      "section": "memory"
+    },
+    {
+      "content": "Un fil de discussion est ouvert sur le Sprint 7 (RAG SQLite).",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:04",
+      "section": "memory"
+    },
+    {
+      "content": "Un fil de discussion est ouvert sur le monitoring des coûts API.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:04",
+      "section": "memory"
+    },
+    {
+      "content": "L'utilisateur travaille sur un projet nommé LatchMed et explore les moyens d'y intégrer l'assistant.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:13",
+      "section": "memory"
     }
   ]
 }
