@@ -123,7 +123,7 @@ pub async fn screenshot_and_analyze_inner(
     let b64 = capture_screen_base64()?;
     eprintln!("[jarvis] screenshot_and_analyze: {} chars base64", b64.len());
 
-    let vocal = "\n\nTu es en mode vocal. Réponds en 1-3 phrases maximum, de façon naturelle et conversationnelle. Pas de listes, pas de markdown.";
+    let vocal = "\n\nTu es en mode vocal. Réponds en 1-3 phrases maximum, de façon naturelle et conversationnelle. Pas de listes, pas de markdown. Utilise une ponctuation riche — virgules, points de suspension, tirets — pour marquer les pauses et le rythme. Tu peux placer des onomatopées naturelles (\"Hm.\", \"Ah.\", \"Bon.\") en début de réponse quand ça colle. Le TTS est sensible à la ponctuation pour l'intonation : plus tu structures, plus le rendu est naturel.";
     let full_system = format!("{}{}", system_prompt, vocal);
 
     // Build contents: prior turns as text-only, last turn carries screenshot + question.

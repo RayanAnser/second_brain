@@ -99,6 +99,30 @@
       "hint": "MEMORY",
       "timestamp": "2026-06-01 21:42",
       "section": "memory"
+    },
+    {
+      "content": "L'utilisateur s'appelle Rayan.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:56",
+      "section": "user"
+    },
+    {
+      "content": "L'utilisateur travaille actuellement sur un projet en cours appelé 'Sprint 7'.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:56",
+      "section": "memory"
+    },
+    {
+      "content": "L'utilisateur travaille actuellement sur le Sprint 7 de son projet.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 22:06",
+      "section": "memory"
+    },
+    {
+      "content": "L'utilisateur a une proche nommée Maya.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 22:06",
+      "section": "user"
     }
   ]
 }

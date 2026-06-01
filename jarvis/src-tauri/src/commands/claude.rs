@@ -16,7 +16,7 @@ pub struct ChatMessage {
     pub content: String,
 }
 
-const VOCAL_INSTRUCTION: &str = "\n\nTu es en mode vocal. Réponds en 1-3 phrases maximum, de façon naturelle et conversationnelle. Pas de listes, pas de markdown.";
+const VOCAL_INSTRUCTION: &str = "\n\nTu es en mode vocal. Réponds en 1-3 phrases maximum, de façon naturelle et conversationnelle. Pas de listes, pas de markdown. Utilise une ponctuation riche — virgules, points de suspension, tirets — pour marquer les pauses et le rythme. Tu peux placer des onomatopées naturelles (\"Hm.\", \"Ah.\", \"Bon.\") en début de réponse quand ça colle. Le TTS est sensible à la ponctuation pour l'intonation : plus tu structures, plus le rendu est naturel.";
 
 const CLASSIFY_SYSTEM: &str = "\
 Classifie le message utilisateur. Retourne UNIQUEMENT du JSON valide, sans texte autour.\n\

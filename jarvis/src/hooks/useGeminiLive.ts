@@ -76,6 +76,11 @@ export function useGeminiLive() {
   const ttsIdleRef          = useRef(true);   // true = between turns, false = playing
   const turnIdRef           = useRef(0);      // incremented on cancel; chain handlers capture it
   const acceptSentencesRef  = useRef(false);  // true only while current ask_claude is streaming
+  // Semaphore: max 2 concurrent synthesize_speech requests.
+  // synthPromises fire early (outside the schedule chain) for latency; the chain
+  // awaits them in order so audio is always scheduled sequentially.
+  const ttsInflightRef     = useRef(0);
+  const ttsSemQueueRef     = useRef<Array<() => void>>([]);
 
   const {
     setIsListening, setIsThinking, setIsSpeaking,
@@ -95,6 +100,10 @@ export function useGeminiLive() {
     acceptSentencesRef.current = false;
     setIsSpeaking(false);
     // AudioContext stays open — currentTime keeps advancing, no scheduling reset.
+    // Flush semaphore: wake waiters so they see the new turnId and bail out.
+    ttsSemQueueRef.current.forEach(resolve => resolve());
+    ttsSemQueueRef.current = [];
+    ttsInflightRef.current = 0;
   }, [setIsSpeaking, setAudioLevel]);
 
   const speakSentence = useCallback((sentence: string) => {
@@ -145,24 +154,49 @@ export function useGeminiLive() {
       ttsRafRef.current = requestAnimationFrame(meterLoop);
     }
 
-    // Capture turn identity so the async chain can detect cancellation.
+    // Capture turn identity so the async chain and synthesis can detect cancellation.
     const myTurnId = turnIdRef.current;
-    console.log("[jarvis] speakSentence: invoke synthesize_speech →", JSON.stringify(clean.slice(0, 60)));
-    const fetchPromise = invoke<number[]>("synthesize_speech", { text: clean });
 
+    // Fire synthesis as soon as a semaphore slot is free (max 2 concurrent).
+    // synthPromise is created outside the schedule chain so synthesis for phrase N+1
+    // can start while phrase N is still being decoded/scheduled.
+    const synthPromise: Promise<number[] | null> = (async () => {
+      if (ttsInflightRef.current < 2) {
+        ttsInflightRef.current++;
+      } else {
+        await new Promise<void>(resolve => ttsSemQueueRef.current.push(resolve));
+        if (turnIdRef.current !== myTurnId) return null;
+      }
+      try {
+        console.log("[jarvis] speakSentence: invoke synthesize_speech →", JSON.stringify(clean.slice(0, 60)));
+        return await invoke<number[]>("synthesize_speech", { text: clean });
+      } catch (err) {
+        console.error("[jarvis] speakSentence: synthesis error —", err);
+        return null;
+      } finally {
+        const next = ttsSemQueueRef.current.shift();
+        if (next) {
+          next(); // hand slot to next waiter — inflight count unchanged
+        } else {
+          ttsInflightRef.current = Math.max(0, ttsInflightRef.current - 1);
+        }
+      }
+    })();
+
+    // Schedule chain: awaits synthPromise in order so audio plays in sentence order.
     scheduleChainRef.current = scheduleChainRef.current.then(async () => {
       if (turnIdRef.current !== myTurnId) {
         console.log("[jarvis] speakSentence: tour annulé, abandon");
         return;
       }
       try {
-        const bytes = await fetchPromise;
-        console.log("[jarvis] speakSentence: synthesize_speech retourné —", bytes.length, "bytes MP3");
+        const bytes = await synthPromise;
         if (turnIdRef.current !== myTurnId) return;
-        if (bytes.length === 0) {
+        if (!bytes || bytes.length === 0) {
           console.error("[jarvis] speakSentence: 0 bytes reçus — pas d'audio");
           return;
         }
+        console.log("[jarvis] speakSentence: synthesize_speech retourné —", bytes.length, "bytes MP3");
         const mp3Buf = new Uint8Array(bytes).buffer;
         console.log("[jarvis] speakSentence: decodeAudioData sur MP3", mp3Buf.byteLength, "bytes, ctx.state=", audioCtx.state);
         const buffer = await audioCtx.decodeAudioData(mp3Buf);

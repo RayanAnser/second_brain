@@ -6,7 +6,7 @@ fn http_client() -> &'static reqwest::Client {
     HTTP_CLIENT.get_or_init(reqwest::Client::new)
 }
 
-const TTS_MODEL: &str = "eleven_flash_v2_5";
+const TTS_MODEL: &str = "eleven_v3";
 
 #[tauri::command]
 pub async fn synthesize_speech(text: String) -> Result<Vec<u8>, String> {
