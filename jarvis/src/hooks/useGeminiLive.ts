@@ -4,12 +4,16 @@ import { listen } from "@tauri-apps/api/event";
 import { useStore } from "../store";
 import type { Message } from "../types";
 
-function buildSystemPrompt(soul: string, user: string, memory: string): string {
+function buildSystemPrompt(soul: string, user: string, memory: string, style: string): string {
   return `Tu es le compagnon IA personnel de l'utilisateur.
 
 <SOUL>
 ${soul}
 </SOUL>
+
+<STYLE>
+${style}
+</STYLE>
 
 <USER>
 ${user}
@@ -312,7 +316,7 @@ export function useGeminiLive() {
         }));
 
         const systemPrompt = memoryContext
-          ? buildSystemPrompt(memoryContext.soul, memoryContext.user, memoryContext.memory)
+          ? buildSystemPrompt(memoryContext.soul, memoryContext.user, memoryContext.memory, memoryContext.style)
           : "Tu es un assistant personnel. Réponds en français.";
 
         acceptSentencesRef.current = true;

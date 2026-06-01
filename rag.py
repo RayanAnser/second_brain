@@ -150,7 +150,7 @@ class RAGIndex:
             d = self.memory_dir / sub
             if d.exists():
                 targets.extend(sorted(d.glob("*.md")))
-        for fname in ("memory.md", "user.md"):
+        for fname in ("memory.md", "user.md", "jarvis_style.md"):
             p = self.memory_dir / fname
             if p.exists():
                 targets.append(p)

@@ -45,6 +45,60 @@
       "hint": "MEMORY",
       "timestamp": "2026-06-01 21:13",
       "section": "memory"
+    },
+    {
+      "content": "L'utilisateur s'appelle Rayan",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:25",
+      "section": "user"
+    },
+    {
+      "content": "Le projet en cours est structuré en sprints, l'étape actuelle étant le Sprint 7",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:25",
+      "section": "memory"
+    },
+    {
+      "content": "Travaille sur un projet technique comprenant un 'Sprint 7' basé sur une base de données SQLite.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:26",
+      "section": "memory"
+    },
+    {
+      "content": "Le prénom de l'utilisateur est Rayan.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:29",
+      "section": "user"
+    },
+    {
+      "content": "L'utilisateur s'intéresse à la physique quantique.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:29",
+      "section": "user"
+    },
+    {
+      "content": "L'utilisateur travaille sur un projet de codage de RAG (Retrieval-Augmented Generation).",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:41",
+      "section": "memory"
+    },
+    {
+      "content": "Le projet en cours de l'utilisateur est structuré en sprints, le prochain étant le Sprint 7.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:41",
+      "section": "memory"
+    },
+    {
+      "content": "L'utilisateur est un développeur ou écrit régulièrement du code.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:42",
+      "section": "user"
+    },
+    {
+      "content": "L'utilisateur travaille sur le développement d'un RAG (Retrieval-Augmented Generation).",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-01 21:42",
+      "section": "memory"
     }
   ]
 }

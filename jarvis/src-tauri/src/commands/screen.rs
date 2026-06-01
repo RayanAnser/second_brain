@@ -4,6 +4,8 @@ use screenshots::Screen;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Emitter};
 
+use super::claude::ChatMessage;
+
 static HTTP_CLIENT: OnceLock<reqwest::Client> = OnceLock::new();
 
 fn http_client() -> &'static reqwest::Client {
@@ -109,11 +111,13 @@ fn capture_screen_base64() -> Result<String, String> {
 
 pub async fn screenshot_and_analyze_inner(
     app: AppHandle,
-    question: String,
+    messages: Vec<ChatMessage>,
     system_prompt: String,
 ) -> Result<(), String> {
     let api_key = std::env::var("GEMINI_API_KEY")
         .map_err(|_| "GEMINI_API_KEY non défini".to_string())?;
+
+    let question = messages.last().map(|m| m.content.clone()).unwrap_or_default();
 
     eprintln!("[jarvis] screenshot_and_analyze: capture écran...");
     let b64 = capture_screen_base64()?;
@@ -122,16 +126,26 @@ pub async fn screenshot_and_analyze_inner(
     let vocal = "\n\nTu es en mode vocal. Réponds en 1-3 phrases maximum, de façon naturelle et conversationnelle. Pas de listes, pas de markdown.";
     let full_system = format!("{}{}", system_prompt, vocal);
 
+    // Build contents: prior turns as text-only, last turn carries screenshot + question.
+    let mut contents: Vec<serde_json::Value> = messages[..messages.len().saturating_sub(1)]
+        .iter()
+        .map(|m| {
+            let role = if m.role == "assistant" { "model" } else { "user" };
+            serde_json::json!({"role": role, "parts": [{"text": m.content}]})
+        })
+        .collect();
+    contents.push(serde_json::json!({
+        "role": "user",
+        "parts": [
+            {"inline_data": {"mime_type": "image/png", "data": b64}},
+            {"text": &question}
+        ]
+    }));
+
     let body = serde_json::json!({
         "system_instruction": {"parts": [{"text": full_system}]},
-        "contents": [{
-            "role": "user",
-            "parts": [
-                {"inline_data": {"mime_type": "image/png", "data": b64}},
-                {"text": &question}
-            ]
-        }],
-        "generationConfig": {"maxOutputTokens": 2048}
+        "contents": contents,
+        "generationConfig": {"maxOutputTokens": 4096}
     });
 
     let url = format!(
@@ -233,8 +247,8 @@ pub async fn screenshot_and_analyze_inner(
 #[tauri::command]
 pub async fn screenshot_and_analyze(
     app: AppHandle,
-    question: String,
+    messages: Vec<ChatMessage>,
     system_prompt: String,
 ) -> Result<(), String> {
-    screenshot_and_analyze_inner(app, question, system_prompt).await
+    screenshot_and_analyze_inner(app, messages, system_prompt).await
 }

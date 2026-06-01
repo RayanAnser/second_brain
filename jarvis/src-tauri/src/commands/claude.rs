@@ -906,7 +906,7 @@ pub async fn ask_claude(
     let user_text = messages.last().map(|m| m.content.clone()).unwrap_or_default();
     if super::screen::is_screen_read(&user_text) {
         eprintln!("[jarvis] ask_claude: SCREEN_READ détecté → screenshot_and_analyze");
-        return super::screen::screenshot_and_analyze_inner(app, user_text, system_prompt).await;
+        return super::screen::screenshot_and_analyze_inner(app, messages, system_prompt).await;
     }
 
     match provider.to_lowercase().as_str() {

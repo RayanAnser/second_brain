@@ -21,6 +21,7 @@ pub struct MemoryContext {
     pub soul:   String,
     pub user:   String,
     pub memory: String,
+    pub style:  String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -59,6 +60,7 @@ pub fn read_memory_context() -> MemoryContext {
         soul:   read("soul.md"),
         user:   read("user.md"),
         memory: read("memory.md"),
+        style:  read("jarvis_style.md"),
     }
 }
 

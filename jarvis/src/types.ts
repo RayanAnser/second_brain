@@ -22,4 +22,5 @@ export interface MemoryContext {
   soul: string;
   user: string;
   memory: string;
+  style: string;
 }
