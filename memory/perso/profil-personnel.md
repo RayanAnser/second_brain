@@ -13,7 +13,8 @@
 - Tante : Louisette
 
 ## Amis
-- Louis
+- Louis : ami de Kedge (ami de liste), aime les jeux vidéo.
+- Louise : très bonne copine rencontrée à Kedge, vient de Nancy, son copain s'appelle Adrien.
 - Victor
 - Maxime (à Metz)
 
