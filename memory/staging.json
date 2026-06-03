@@ -1,33 +1,10 @@
 {
   "7649220324": [
     {
-      "content": "Projet de nouveau journal journalistique devant comporter trois pages : accueil, coûts et FAQ.",
+      "content": "L'utilisateur rencontre des problèmes avec sa manager",
       "hint": "MEMORY",
-      "timestamp": "2026-06-03 21:01",
-      "section": "memory"
-    },
-    {
-      "content": "Projet de podcast sur les éléphants : l'utilisateur souhaite inclure l'idée d'inviter des éléphants de différentes couleurs.",
-      "hint": "MEMORY",
-      "timestamp": "2026-06-03 21:02",
-      "section": "memory"
-    },
-    {
-      "content": "Ajouter un tutoriel détaillé pour l'intégration Mac d'Alice afin de faciliter sa prise en main.",
-      "hint": "MEMORY",
-      "timestamp": "2026-06-03 21:02",
-      "section": "memory"
-    },
-    {
-      "content": "intégration Mac pour Alice",
-      "hint": "TACHE",
-      "timestamp": "2026-06-03 21:05"
-    },
-    {
-      "content": "Vision pour l'intégration Mac du projet Radis : inclure une petite fenêtre contextuelle permettant d'interagir avec un élève en conservant le contexte.",
-      "hint": "MEMORY",
-      "timestamp": "2026-06-03 21:06",
-      "section": "memory"
+      "timestamp": "2026-06-03 21:28",
+      "section": "user"
     }
   ]
 }
