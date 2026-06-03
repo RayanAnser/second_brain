@@ -16,6 +16,7 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_autostart::init(tauri_plugin_autostart::MacosLauncher::LaunchAgent, Some(vec![])))
         .manage(commands::window::WindowMode(std::sync::Mutex::new(false)))
         .setup(|app| {
             use tauri::{Emitter, Manager, window::Color};
@@ -37,7 +38,8 @@ pub fn run() {
             }
             use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
-            let handle = app.handle().clone();
+            let handle       = app.handle().clone();
+            let handle_ctrl0 = app.handle().clone();
             app.global_shortcut().on_shortcut(
                 Shortcut::new(Some(Modifiers::CONTROL), Code::Space),
                 move |_app, _shortcut, event| {
@@ -47,10 +49,31 @@ pub fn run() {
                         "hotkey-listen-stop"
                     };
                     handle.emit(name, ()).ok();
-                    eprintln!("[jarvis] global shortcut: {}", name);
+                    eprintln!("[jarvis] global shortcut Ctrl+Space: {}", name);
                 },
             )?;
             eprintln!("[jarvis] global shortcut Ctrl+Space enregistré");
+
+            app.global_shortcut().on_shortcut(
+                Shortcut::new(Some(Modifiers::CONTROL), Code::Digit0),
+                move |_app, _shortcut, event| {
+                    let name = if event.state == ShortcutState::Pressed {
+                        "hotkey-listen-start"
+                    } else {
+                        "hotkey-listen-stop"
+                    };
+                    handle_ctrl0.emit(name, ()).ok();
+                    eprintln!("[jarvis] global shortcut Ctrl+0: {}", name);
+                },
+            )?;
+            eprintln!("[jarvis] global shortcut Ctrl+0 enregistré");
+
+            use tauri_plugin_autostart::ManagerExt;
+            match app.autolaunch().enable() {
+                Ok(_)  => eprintln!("[jarvis] autostart activé"),
+                Err(e) => eprintln!("[jarvis] autostart enable failed: {:?}", e),
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

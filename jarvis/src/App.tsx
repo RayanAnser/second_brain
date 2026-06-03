@@ -246,15 +246,17 @@ export default function App() {
     };
   }, [startListening, stopListening]);
 
-  // ── Spacebar binding — hold-to-talk in both modes ─────────────────────────
+  // ── Ctrl+Space binding — hold-to-talk in both modes (Space alone ignored) ──
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.code === "Space" && !e.repeat && !(e.target as HTMLElement)?.matches("input,textarea")) {
+      if (e.code === "Space" && e.ctrlKey && !e.repeat && !(e.target as HTMLElement)?.matches("input,textarea")) {
         e.preventDefault();
         startListening();
       }
     };
     const up = (e: KeyboardEvent) => {
+      // Stop unconditionally on Space-up so the mic never gets stuck
+      // if Ctrl is released before Space.
       if (e.code === "Space") stopListening();
     };
     window.addEventListener("keydown", down);
@@ -450,16 +452,17 @@ export default function App() {
         />
       ))}
 
-      {/* ── Pin button (bottom-right) ── */}
+      {/* ── Compact button (bottom-right) ── */}
       <button
-        onClick={() => setIsPinned((p) => !p)}
-        title={isPinned ? "Désépingler (auto-collapse actif)" : "Épingler (désactiver auto-collapse)"}
-        className={`absolute bottom-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-sm leading-none
-                    ${isPinned
-                      ? "text-indigo-400/80 bg-white/10 hover:bg-white/20"
-                      : "text-white/20 hover:text-white/50 hover:bg-white/10"}`}
+        onClick={() => {
+          invoke("set_window_compact").catch(console.error);
+          setIsCompact(true);
+          setIsPinned(false);
+        }}
+        title="Réduire en mode compact"
+        className="absolute bottom-3 right-3 z-20 w-7 h-7 flex items-center justify-center rounded-lg transition-colors text-sm leading-none text-white/20 hover:text-white/50 hover:bg-white/10"
       >
-        {isPinned ? "📌" : "⤢"}
+        _
       </button>
 
       {/* ── Capture toast ── */}
