@@ -101,6 +101,7 @@ MEMORY_MD       = MEMORY_DIR / "memory.md"
 LOGS_DIR        = MEMORY_DIR / "logs"
 PROJETS_DIR     = MEMORY_DIR / "projets"
 CONCEPTS_DIR    = MEMORY_DIR / "concepts"
+IDEES_DIR       = MEMORY_DIR / "idees"
 PERSO_DIR       = MEMORY_DIR / "perso"
 PROFIL_PERSO_MD    = MEMORY_DIR / "perso" / "profil-personnel.md"
 STAGING_FILE       = MEMORY_DIR / "staging.json"
@@ -771,6 +772,21 @@ async def select_memory_files(text: str) -> list[Path]:
         return []
 
 
+def _make_slug(text: str, max_len: int = 40) -> str:
+    slug = text.lower().strip()
+    for src, dst in [
+        ("à","a"),("á","a"),("â","a"),("ä","a"),
+        ("è","e"),("é","e"),("ê","e"),("ë","e"),
+        ("ì","i"),("í","i"),("î","i"),("ï","i"),
+        ("ò","o"),("ó","o"),("ô","o"),("ö","o"),
+        ("ù","u"),("ú","u"),("û","u"),("ü","u"),
+        ("ç","c"),("ñ","n"),("œ","oe"),
+    ]:
+        slug = slug.replace(src, dst)
+    slug = re.sub(r"[^a-z0-9]+", "-", slug).strip("-")
+    return slug[:max_len].rstrip("-")
+
+
 def _append_to_section(file_path: Path, section: str, line: str):
     """Insère '- line' sous '## section', crée la section si absente."""
     content = file_path.read_text() if file_path.exists() else ""
@@ -796,6 +812,104 @@ def _dispatch_tache(content: str):
     entry_line = f"{content}  _({timestamp})_"
     _append_to_section(TACHES_MD, "En cours", entry_line)
     _push_to_github(TACHES_MD, TACHES_MD.read_text())
+    if _RAG_AVAILABLE and get_rag():
+        threading.Thread(target=get_rag().index_modified, daemon=True).start()
+
+
+def _migrate_idees_from_memory() -> None:
+    """Migrate les idées de memory.md (sections Captures confirmées + Idées en suspens) vers memory/idees/."""
+    if not MEMORY_MD.exists():
+        return
+
+    IDEES_DIR.mkdir(parents=True, exist_ok=True)
+    content = MEMORY_MD.read_text()
+    migrated = 0
+
+    # ── 1. Section "Captures confirmées" ─────────────────────────────────────
+    captures_header = "## Captures confirmées"
+    if captures_header in content:
+        idx      = content.index(captures_header)
+        next_sec = content.find("\n##", idx + len(captures_header))
+        body     = content[idx + len(captures_header): next_sec if next_sec != -1 else None]
+        for line in body.splitlines():
+            line = line.strip()
+            if not line.startswith("- "):
+                continue
+            raw = re.sub(r"\s*_\(jarvis,\s*[\d-]+\)_\s*$", "", line[2:]).strip()
+            if not raw:
+                continue
+            slug   = _make_slug(raw)
+            target = IDEES_DIR / f"{slug}.md"
+            if not target.exists():
+                target.write_text(f"# {raw}\n\n_migré depuis memory.md_\n")
+                migrated += 1
+
+    # ── 2. Tableau "🟡 Idées en suspens" ──────────────────────────────────────
+    suspens_header = "## 🟡 Idées en suspens"
+    if suspens_header in content:
+        idx      = content.index(suspens_header)
+        next_sec = content.find("\n##", idx + len(suspens_header))
+        body     = content[idx + len(suspens_header): next_sec if next_sec != -1 else None]
+        for line in body.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("|"):
+                continue
+            if stripped.startswith("| Date") or stripped.startswith("|---"):
+                continue
+            cols = [c.strip() for c in stripped.strip("|").split("|")]
+            if len(cols) < 2:
+                continue
+            idea   = cols[1].strip()
+            domain = cols[2].strip() if len(cols) > 2 else ""
+            if not idea:
+                continue
+            slug   = _make_slug(idea)
+            target = IDEES_DIR / f"{slug}.md"
+            if not target.exists():
+                body_txt = f"# {idea}\n"
+                if domain:
+                    body_txt += f"\n_Domaine : {domain}_\n"
+                body_txt += "\n_migré depuis memory.md_\n"
+                target.write_text(body_txt)
+                migrated += 1
+
+    if migrated == 0:
+        return
+
+    # ── 3. Nettoyer memory.md ────────────────────────────────────────────────
+    updated = content
+
+    # Supprimer entièrement "Captures confirmées"
+    if captures_header in updated:
+        idx      = updated.index(captures_header)
+        next_sec = updated.find("\n##", idx + len(captures_header))
+        if next_sec != -1:
+            updated = updated[:idx].rstrip("\n") + "\n" + updated[next_sec:]
+        else:
+            updated = updated[:idx].rstrip("\n") + "\n"
+
+    # Vider les lignes de données du tableau "Idées en suspens" (garde header + séparateur)
+    if suspens_header in updated:
+        idx      = updated.index(suspens_header)
+        next_sec = updated.find("\n##", idx + len(suspens_header))
+        section_end = next_sec if next_sec != -1 else len(updated)
+        section_lines = updated[idx:section_end].splitlines()
+        kept = []
+        for ln in section_lines:
+            stripped = ln.strip()
+            is_data_row = (
+                stripped.startswith("|")
+                and not stripped.startswith("| Date")
+                and not stripped.startswith("|---")
+            )
+            if not is_data_row:
+                kept.append(ln)
+        updated = updated[:idx] + "\n".join(kept) + updated[section_end:]
+
+    MEMORY_MD.write_text(updated)
+    _push_to_github(MEMORY_MD, updated)
+    _invalidate_context_cache()
+    log.info(f"[migrate_idees] {migrated} idée(s) migrée(s) → memory/idees/")
     if _RAG_AVAILABLE and get_rag():
         threading.Thread(target=get_rag().index_modified, daemon=True).start()
 
@@ -1477,8 +1591,42 @@ async def _http_staging_confirm(request):
             PROFIL_PERSO_MD.parent.mkdir(parents=True, exist_ok=True)
             _append_to_section(PROFIL_PERSO_MD, "Notes automatiques", entry_line)
             _push_to_github(PROFIL_PERSO_MD, PROFIL_PERSO_MD.read_text())
+        elif hint == "CAPTURE_IDEE":
+            IDEES_DIR.mkdir(parents=True, exist_ok=True)
+            slug = _make_slug(content)
+            log.info(f"[idees] content={content!r}")
+            log.info(f"[idees] IDEES_DIR={str(IDEES_DIR)!r}")
+
+            # RAG décide toujours — slug sert uniquement de fallback pour le nom du fichier
+            best_hit   = None
+            best_score = 0.0
+            if _RAG_AVAILABLE and get_rag():
+                raw_results = get_rag().search(content, top_k=3)
+                log.info(f"[idees] RAG results: {len(raw_results)} résultats")
+                for i, r in enumerate(raw_results):
+                    log.info(f"[idees] RAG result[{i}]: score={r.score:.2f} path={r.source_path!r}")
+                hits = [r for r in raw_results if str(IDEES_DIR) in r.source_path]
+                log.info(f"[idees] après filtre idees/: {len(hits)} résultats")
+                if hits:
+                    best_hit   = hits[0]
+                    best_score = hits[0].score
+            log.info(f"[idees] seuil: best_score={best_score:.2f} threshold=0.4")
+            log.info(f"[idees] RAG best match: {Path(best_hit.source_path).stem if best_hit else 'none'} score={best_score:.2f}")
+
+            if best_hit and best_score > 0.4:
+                best_path = Path(best_hit.source_path)
+                log.info(f"[idees] decision: enrichir {best_path.stem}")
+                _append_to_section(best_path, "Enrichissements", entry_line)
+                _push_to_github(best_path, best_path.read_text())
+                log.info(f"[idees] enrichissement: {best_path.stem} ← {content!r}")
+            else:
+                target = IDEES_DIR / f"{slug}.md"
+                log.info(f"[idees] decision: créer {slug}")
+                target.write_text(f"# {content}\n\n_{timestamp}_\n")
+                _push_to_github(target, target.read_text())
+                log.info(f"[staging_confirm] CAPTURE_IDEE créé → {target.name}")
         else:
-            # CAPTURE_IDEE, CAPTURE_CONCEPT, CAPTURE_PROJET
+            # CAPTURE_CONCEPT, CAPTURE_PROJET
             _append_to_section(MEMORY_MD, "Captures confirmées", entry_line)
             _push_to_github(MEMORY_MD, MEMORY_MD.read_text())
             _archive_overflow()
@@ -2547,6 +2695,7 @@ def _heartbeat_loop():
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 async def on_startup(app):
+    _migrate_idees_from_memory()
     has_staged = load_staging()
     if has_staged:
         total = sum(len(v) for v in staged_captures.values())

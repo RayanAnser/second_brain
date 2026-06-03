@@ -12,3 +12,4 @@
 -   _(2026-05-29)_
 - Faire un résumé de l'ère du vide de Lipovetsky  _(2026-05-30)_
 - appeler le fleuriste  _(2026-06-03)_
+- faire un tutoriel pour l'intégration Mac pour Alice  _(2026-06-03)_

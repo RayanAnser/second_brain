@@ -25,14 +25,6 @@
 ## 🟡 Idées en suspens
 | Date | Idée | Domaine |
 |------|------|---------|
-| 2026-05-20 | Intégration Google Calendar pour synchroniser calendriers | Compagnon IA |
-| 2026-05-20 | Explorer autres concepts Bourdieu (champ, violence symbolique, distinction) | Concepts |
-| 2026-05-22 | Effacer/modifier des parties des fichiers capturés (idées périmées) | Compagnon IA |
-| 2026-05-22 | Monitoring consommation API/tokens | Compagnon IA |
-| 2026-05-22 | Améliorer classification intentions : trop de CAPTURE au lieu de CONVERSATION | Compagnon IA |
-| 2026-05-27 | Inviter quelqu'un en disant 'ça me ferait plaisir de' au lieu de 'si' | Personnel |
-| 2026-05-28 | Faire un site journalistique | Projet |
-
 ## 🟢 Décisions prises
 - Architecture mémoire : Obsidian + fichiers Markdown locaux (pas Notion pour le core)
 - Interface MVP : Telegram (voice natifs, zéro friction mobile)
@@ -74,7 +66,4 @@
 - Test IST mercredi ou jeudi la semaine prochaine
 - Projet de créer une intégration Mac personnalisée de l'assistant (Jarvis) pour Alice.  _(jarvis, 2026-06-02)_
 - Projet 'Alice Mac' : développement d'une interface hybride, sans terminal, avec accès aux données locales.  _(jarvis, 2026-06-02)_
-
-## Captures confirmées
-- podcast IA  _(jarvis, 2026-06-03)_
-- faire un podcast sur les éléphants  _(jarvis, 2026-06-03)_
+- L'utilisateur a le projet de créer un podcast sur les éléphants et souhaite y intégrer l'idée d'inviter des flamants roses.  _(jarvis, 2026-06-03)_

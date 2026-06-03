@@ -146,7 +146,7 @@ class RAGIndex:
     def _files_to_index(self) -> list[Path]:
         """Fichiers mémoire à indexer (hors soul.md et logs)."""
         targets: list[Path] = []
-        for sub in ("projets", "concepts", "perso"):
+        for sub in ("projets", "concepts", "idees", "perso"):
             d = self.memory_dir / sub
             if d.exists():
                 targets.extend(sorted(d.glob("*.md")))

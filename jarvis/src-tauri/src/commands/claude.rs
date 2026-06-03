@@ -400,11 +400,11 @@ async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle
         },
         "contents": [{"role": "user", "parts": [{"text": &msg}]}],
         "generationConfig": {
-            "maxOutputTokens": 512,
+            "maxOutputTokens": 1024,
             "responseMimeType": "application/json"
         }
     });
-    eprintln!("[classify] request maxOutputTokens=512");
+    eprintln!("[classify] request maxOutputTokens=1024");
 
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={}",
