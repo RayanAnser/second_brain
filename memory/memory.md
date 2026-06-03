@@ -67,3 +67,7 @@
 - Projet de créer une intégration Mac personnalisée de l'assistant (Jarvis) pour Alice.  _(jarvis, 2026-06-02)_
 - Projet 'Alice Mac' : développement d'une interface hybride, sans terminal, avec accès aux données locales.  _(jarvis, 2026-06-02)_
 - L'utilisateur a le projet de créer un podcast sur les éléphants et souhaite y intégrer l'idée d'inviter des flamants roses.  _(jarvis, 2026-06-03)_
+
+- Le MVP du projet 'Compagnon IA' est finalisé à 95% ; les dernières étapes sont l'auto-amélioration sur desktop et l'adaptation Telegram.  _(jarvis, 2026-06-03)_
+## Captures confirmées
+- Compagnon IA : MVP terminé à 95%, reste auto-amélioration sur desktop et adaptation Telegram  _(jarvis, 2026-06-03)_
