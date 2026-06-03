@@ -305,6 +305,7 @@ async fn execute_staging(
         let _ = app.emit("claude-capture", toast);
 
         for (intent, content, _) in &captures {
+            eprintln!("[classify] executing intent={:?} content={:?}", intent, content);
             // All capture types (including TACHE) go to /stage so they appear in the
             // FloatingCards UI. confirm_staging_item routes TACHE → /task on user confirm.
             let http_result = http_client()
@@ -388,9 +389,9 @@ async fn classify_and_stage(text: String, api_key: String, app: AppHandle) {
 }
 
 // ── Gemini Flash classification (LLM_PROVIDER=gemini) ────────────────────────
-async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle) {
+async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle) -> Vec<String> {
     eprintln!("[jarvis] classify_and_stage(gemini): text={:?}", text.chars().take(60).collect::<String>());
-    if text.is_empty() { return; }
+    if text.is_empty() { return vec![]; }
 
     let msg = format!("{}{}", current_date_ctx(), text);
     let body = serde_json::json!({
@@ -418,12 +419,12 @@ async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle
         .await
     {
         Ok(r)  => r,
-        Err(e) => { eprintln!("[jarvis] classify(gemini): request failed: {e}"); return; }
+        Err(e) => { eprintln!("[jarvis] classify(gemini): request failed: {e}"); return vec![]; }
     };
 
     let json: serde_json::Value = match resp.json().await {
         Ok(j)  => j,
-        Err(e) => { eprintln!("[jarvis] classify(gemini): parse failed: {e}"); return; }
+        Err(e) => { eprintln!("[jarvis] classify(gemini): parse failed: {e}"); return vec![]; }
     };
 
     let finish_reason = json
@@ -440,7 +441,7 @@ async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle
         .and_then(|p| p.get("text")).and_then(|t| t.as_str())
     {
         Some(s) => s.to_string(),
-        None    => { eprintln!("[jarvis] classify(gemini): unexpected response shape: {json:?}"); return; }
+        None    => { eprintln!("[jarvis] classify(gemini): unexpected response shape: {json:?}"); return vec![]; }
     };
     eprintln!("[classify] raw len={} chars", raw.len());
     eprintln!("[classify] raw content={:?}", raw);
@@ -448,7 +449,17 @@ async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle
     let items = parse_classify_response(&raw, &text);
     let companion_url = std::env::var("COMPANION_URL")
         .unwrap_or_else(|_| "http://localhost:8765".to_string());
+
+    let staged_contents: Vec<String> = items.iter()
+        .filter(|(intent, _, _)| matches!(
+            intent.as_str(),
+            "CAPTURE_IDEE" | "CAPTURE_PROJET" | "CAPTURE_CONCEPT" | "CAPTURE_PERSO" | "TACHE"
+        ))
+        .map(|(_, content, _)| content.clone())
+        .collect();
+
     execute_staging(items, &companion_url, &app).await;
+    staged_contents
 }
 
 // ── Parse classification JSON (shared) ───────────────────────────────────────
@@ -464,7 +475,7 @@ fn parse_classify_response(raw: &str, fallback_text: &str) -> Vec<(String, Strin
         }
     };
 
-    if classified.is_array() {
+    let items: Vec<(String, String, String)> = if classified.is_array() {
         classified.as_array().unwrap().iter()
             .filter_map(|item| {
                 let intent  = item.get("intent")?.as_str()?.to_string();
@@ -480,7 +491,9 @@ fn parse_classify_response(raw: &str, fallback_text: &str) -> Vec<(String, Strin
                           .unwrap_or(fallback_text).to_string();
         let slug    = classified.get("slug").and_then(|v| v.as_str()).unwrap_or("").to_string();
         vec![(intent, content, slug)]
-    }
+    };
+    eprintln!("[classify] parsed {} items", items.len());
+    items
 }
 
 // ── RAG injection (shared) ────────────────────────────────────────────────────
@@ -590,6 +603,7 @@ async fn extract_and_stage_memory_gemini(
     assistant_text: String,
     companion_url: String,
     api_key: String,
+    already_staged: Vec<String>,
 ) {
     if assistant_text.trim().len() < 30 { return; }
 
@@ -631,7 +645,40 @@ async fn extract_and_stage_memory_gemini(
         Some(s) => s.to_string(),
         None    => { eprintln!("[jarvis] extract_memory(gemini): unexpected shape: {json:?}"); return; }
     };
-    stage_memory_items(&raw, &companion_url).await;
+
+    let cleaned = strip_code_fence(&raw);
+    let items = match serde_json::from_str::<serde_json::Value>(cleaned) {
+        Ok(serde_json::Value::Array(arr)) => arr,
+        _ => { eprintln!("[jarvis] extract_memory(gemini): JSON invalide après stripping — raw={raw:?}"); return; }
+    };
+    if items.is_empty() {
+        eprintln!("[jarvis] extract_memory: rien à mémoriser");
+        return;
+    }
+
+    eprintln!("[extract_memory] already_staged: {:?}", already_staged);
+
+    for item in &items {
+        let content = item.get("content").and_then(|v| v.as_str()).unwrap_or("").trim();
+        let section = item.get("section").and_then(|v| v.as_str()).unwrap_or("memory");
+        if content.is_empty() { continue; }
+
+        let content_lower = content.to_lowercase();
+        let is_dup = already_staged.iter().any(|s| {
+            let s_lower = s.to_lowercase();
+            content_lower.contains(&s_lower) || s_lower.contains(&content_lower)
+        });
+        if is_dup {
+            eprintln!("[extract_memory] skip doublon: {:?}", content);
+            continue;
+        }
+        eprintln!("[extract_memory] stage ok: {:?}", content);
+        let _ = http_client()
+            .post(format!("{companion_url}/stage"))
+            .json(&serde_json::json!({"content": content, "hint": "MEMORY", "section": section}))
+            .send()
+            .await;
+    }
 }
 
 // ── Claude Sonnet streaming ───────────────────────────────────────────────────
@@ -900,9 +947,9 @@ async fn ask_gemini_stream(
         app.emit("claude-sentence", sentence).map_err(|e| e.to_string())?;
     }
 
-    classify_and_stage_gemini(user_text.clone(), api_key.clone(), app.clone()).await;
+    let already_staged = classify_and_stage_gemini(user_text.clone(), api_key.clone(), app.clone()).await;
     app.emit("claude-done", ()).map_err(|e| e.to_string())?;
-    tokio::spawn(extract_and_stage_memory_gemini(user_text, full_assistant, companion_url, api_key));
+    tokio::spawn(extract_and_stage_memory_gemini(user_text, full_assistant, companion_url, api_key, already_staged));
     Ok(())
 }
 

@@ -77,3 +77,4 @@
 
 ## Captures confirmées
 - podcast IA  _(jarvis, 2026-06-03)_
+- faire un podcast sur les éléphants  _(jarvis, 2026-06-03)_
