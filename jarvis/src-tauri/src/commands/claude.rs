@@ -398,8 +398,12 @@ async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle
             "parts": [{"text": CLASSIFY_SYSTEM}]
         },
         "contents": [{"role": "user", "parts": [{"text": &msg}]}],
-        "generationConfig": {"maxOutputTokens": 400}
+        "generationConfig": {
+            "maxOutputTokens": 512,
+            "responseMimeType": "application/json"
+        }
     });
+    eprintln!("[classify] request maxOutputTokens=512");
 
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={}",
@@ -422,6 +426,13 @@ async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle
         Err(e) => { eprintln!("[jarvis] classify(gemini): parse failed: {e}"); return; }
     };
 
+    let finish_reason = json
+        .get("candidates").and_then(|c| c.get(0))
+        .and_then(|c| c.get("finishReason"))
+        .and_then(|r| r.as_str())
+        .unwrap_or("unknown");
+    eprintln!("[classify] finishReason={:?}", finish_reason);
+
     let raw = match json
         .get("candidates").and_then(|c| c.get(0))
         .and_then(|c| c.get("content"))
@@ -431,6 +442,8 @@ async fn classify_and_stage_gemini(text: String, api_key: String, app: AppHandle
         Some(s) => s.to_string(),
         None    => { eprintln!("[jarvis] classify(gemini): unexpected response shape: {json:?}"); return; }
     };
+    eprintln!("[classify] raw len={} chars", raw.len());
+    eprintln!("[classify] raw content={:?}", raw);
 
     let items = parse_classify_response(&raw, &text);
     let companion_url = std::env::var("COMPANION_URL")

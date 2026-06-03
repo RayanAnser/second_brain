@@ -74,3 +74,6 @@
 - Test IST mercredi ou jeudi la semaine prochaine
 - Projet de créer une intégration Mac personnalisée de l'assistant (Jarvis) pour Alice.  _(jarvis, 2026-06-02)_
 - Projet 'Alice Mac' : développement d'une interface hybride, sans terminal, avec accès aux données locales.  _(jarvis, 2026-06-02)_
+
+## Captures confirmées
+- podcast IA  _(jarvis, 2026-06-03)_

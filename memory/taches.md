@@ -11,3 +11,4 @@
 - Acheter billets pour Metz  _(2026-05-29)_
 -   _(2026-05-29)_
 - Faire un résumé de l'ère du vide de Lipovetsky  _(2026-05-30)_
+- appeler le fleuriste  _(2026-06-03)_
