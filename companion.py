@@ -56,6 +56,18 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
+def _strip_to_json(raw: str) -> str:
+    """Retourne la sous-chaîne commençant au premier [ ou { et finissant au dernier ] ou }.
+    Même logique que strip_code_fence() dans claude.rs."""
+    start = next((i for i, c in enumerate(raw) if c in ("{", "[")), None)
+    end_curly  = raw.rfind("}")
+    end_bracket = raw.rfind("]")
+    end = max(end_curly, end_bracket)
+    if start is None or end == -1 or end < start:
+        return raw
+    return raw[start:end + 1]
+
+
 def md_to_html(text: str) -> str:
     """Convert Claude's Markdown output to Telegram HTML."""
     # Escape HTML chars first, then re-add our own tags
@@ -456,7 +468,7 @@ async def _extract_and_stage_memory(
     prompt = f"USER: {user_text}\n\nASSISTANT: {assistant_text}"
     try:
         if LLM_PROVIDER == "gemini":
-            raw = await _gemini_generate(_MEMORY_EXTRACT_SYSTEM, prompt, 600)
+            raw = await _gemini_generate(_MEMORY_EXTRACT_SYSTEM, prompt, 1024)
         else:
             response = claude.messages.create(
                 model="claude-haiku-4-5-20251001",
@@ -466,11 +478,9 @@ async def _extract_and_stage_memory(
             )
             _log_api_call(response, "_extract_and_stage_memory")
             raw = response.content[0].text.strip()
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.strip()
+        log.info(f"[extract_memory] raw_before_strip={raw!r}")
+        raw = _strip_to_json(raw)
+        log.info(f"[extract_memory] raw_after_strip={raw!r}")
         items = json.loads(raw)
         if not isinstance(items, list):
             return
@@ -807,12 +817,9 @@ async def classify_intent(text: str) -> dict:
             )
             _log_api_call(response, "classify_intent")
             raw = response.content[0].text.strip()
-        log.info(f"classify_intent raw={raw!r}")
-        if raw.startswith("```"):
-            raw = raw.split("```")[1]
-            if raw.startswith("json"):
-                raw = raw[4:]
-            raw = raw.strip()
+        log.info(f"classify_intent raw_before_strip={raw!r}")
+        raw = _strip_to_json(raw)
+        log.info(f"classify_intent raw_after_strip={raw!r}")
         result = json.loads(raw)
         log.info(f"classify_intent → intent={result.get('intent')!r} slug={result.get('slug')!r}")
         return result
