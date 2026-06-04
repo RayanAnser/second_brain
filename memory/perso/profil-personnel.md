@@ -20,6 +20,7 @@
 
 ## Relations sentimentales
 - Crush sur Maya (capturé le 2026-05-23 — première présentation aux amis ce jour)
+- Amélia : ex-petite copine ("grand-ex") _(2026-06-04)_
 
 ## Notes automatiques
 - est gaucher  _(jarvis, 2026-05-27)_
