@@ -807,6 +807,7 @@ async def classify_intent(text: str) -> dict:
                 _INTENT_SYSTEM,
                 f"{date_ctx}\n{text}",
                 500,
+                json_mode=True,
             )
         else:
             response = claude.messages.create(
@@ -1745,13 +1746,16 @@ async def _http_task(request):
 
 # ── Gemini helpers ───────────────────────────────────────────────────────────
 
-async def _gemini_generate(system: str, user_text: str, max_tokens: int) -> str:
+async def _gemini_generate(system: str, user_text: str, max_tokens: int, json_mode: bool = False) -> str:
     """Non-streaming generateContent — retourne le texte brut de la réponse."""
     url = f"{_GEMINI_BASE}:generateContent?key={GEMINI_KEY}"
+    gen_config: dict = {"maxOutputTokens": max_tokens}
+    if json_mode:
+        gen_config["response_mime_type"] = "application/json"
     body = {
         "system_instruction": {"parts": [{"text": system}]},
         "contents": [{"role": "user", "parts": [{"text": user_text}]}],
-        "generationConfig": {"maxOutputTokens": max_tokens},
+        "generationConfig": gen_config,
     }
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(url, json=body)
