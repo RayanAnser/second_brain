@@ -1,69 +1,93 @@
-# Compagnon IA personnel
+# Compagnon IA personnel (Jarvis)
 
-## Statut
-**Sprint 6 en cours — consolidation nocturne + optimisations déployées**
+**Statut** : MVP à ~98% — phase de test en conditions réelles
 
-## Contexte
-Second cerveau personnel + mémoire persistante + interface voice-first en français. Inspiré par la vidéo Cole Medin "AI Second Brain with Claude Code" et le concept de "Triade létale" OpenClaw (construire sa propre solution pour garder le contrôle).
+**Vision** : Compagnon IA personnel toujours disponible sur le bureau, qui connaît Rayan, capture ses pensées, l'aide à se structurer et évolue avec lui.
 
-## Stack retenue
-| Composant | Rôle |
-|-----------|------|
-| Obsidian | Mémoire locale (fichiers Markdown) |
-| Claude Code | Cerveau — raisonnement + construction |
-| Groq Whisper (`whisper-large-v3`) | Transcription voix → texte |
-| Telegram | Interface mobile, voice messages natifs |
-| Python (`companion.py`) | Glue technique |
+---
 
-## Ce qui est en place (Sprint 2)
-## Ce qui est en place (Sprints 2-5)
-- Transcription voix via Groq Whisper
-- Extraction automatique de mémoire en fin de session (`/save`)
-- Validation inline keyboard avant écriture dans `memory.md`
-- Logs de session dans `memory/logs/`
-- Commandes : `/save`, `/reset`, `/status`, `/costs`
-- **v0.1.0 validée** : mémoire connectée (Rayan, 30 ans, AI Product Builder Paris), vocal+texte Telegram
-- **Intégration Notion** : Token configuré ✓, recherche Notion intégrée
-- **Intégration NotebookLM** : connexion recherche opérationnelle
-- **GitHub Sync** : opérationnel (pull code fonctionnel)
-- **Agenda** : intents AGENDA_ADD/QUERY opérationnels, heartbeat 8h avec RDV du jour
-- **TTS** : ElevenLabs turbo (~500ms)
-- **Optimisations Sprint 6** :
-  - Prompt caching Anthropic : -58% coûts, -1373 tokens system prompt
-  - Haiku pour classify/select : -88% coûts
-  - Async parallel : -300ms latence
-  - Cost tracking : /costs command
+## Stack technique
+
+| Composant | Technologie |
+|---|---|
+| STT | Groq Whisper large-v3-turbo (~250ms) |
+| LLM | Gemini 3.5 Flash (fallback depuis Claude épuisé) |
+| TTS | ElevenLabs eleven_v3, voix F1toM6PcP54s45kOOAyV |
+| Mémoire | companion.py + RAG SQLite OpenAI embeddings |
+| Desktop | Tauri 2 + React + Three.js |
+| Déploiement | Railway (companion) + Windows local (Jarvis) |
+
+---
 
 ## Architecture mémoire
-| Fichier | Rôle |
-|---------|------|
-| `memory/soul.md` | Personnalité du compagnon |
-| `memory/user.md` | Profil cognitif + contexte utilisateur |
-| `memory/memory.md` | Projets, décisions, logs de session |
-| `memory/logs/` | Transcripts bruts (non lus par le bot) |
 
-## Décisions prises (ne pas re-débattre)
-- Markdown local, pas Notion pour la mémoire core
-- Telegram comme interface MVP (zéro friction mobile)
-- Modèle mixte : extraction auto + validation légère
-- Ne pas construire from scratch si l'existant suffit (OpenClaw, Claude Code)
-- Ordre de priorité MVP : mémoire persistante → relances → voice
+| Fichier | Rôle | Injecté prompt | RAG |
+|---|---|---|---|
+| soul.md | Personnalité Jarvis | ✅ | ✅ |
+| user.md | Profil cognitif/pro | ✅ | ✅ |
+| memory.md | Contexte récent, décisions | ✅ | ✅ |
+| jarvis_style.md | Corpus ton TARS/JARVIS | ✅ | ✅ |
+| profil-personnel.md | Famille, amis, relations | ❌ | ✅ |
+| taches.md | Todo list | ❌ | ✅ |
+| agenda.md | Événements datés | ❌ | ✅ |
+| memory_archive.md | Débordement memory.md | ❌ | ✅ |
+| idees/*.md | Un fichier par idée, enrichissement RAG | ❌ | ✅ |
+| embeddings/index.db | RAG SQLite | — | — |
 
-## Prochaine étape
-- **Jarvis V0.1 — Deux problèmes urgents à résoudre :**
-  1. Réduire la latence (actuellement trop élevée)
-  2. Nettoyer le Markdown des réponses avant le TTS (balises lues à voix haute)
-- **Sprint 6 (consolidation nocturne)** : mécanisme de consolidation automatique de la mémoire
-- **Sprint 7** : RAG SQLite pour recherche dans la mémoire
-- Enrichir `user.md` avec l'export ChatGPT (en attente)
+---
 
-## Log
-| Date | Événement |
-|------|-----------||
-| 2026-05-23 | **Jarvis V0.1** — Deux problèmes identifiés : 1) Latence trop élevée 2) TTS lit les balises Markdown à voix haute (nettoyage MD requis avant TTS) |
-| 2026-05-22 | **v0.1.0 desktop** — Première version desktop opérationnelle |
-| 2026-05-22 | Sprint 5 terminé — intégrations Notion/NotebookLM/GitHub Sync opérationnelles |
-| 2026-05-22 | Clarification intégration recherche : NotebookLM suffit, Perplexity non nécessaire |
-| 2026-05-18 | Sprint 2 opérationnel — extraction mémoire + validation inline keyboard |
-| — | Sprint 1 — pipeline Telegram → Whisper → Claude |
-| — | Session initiale — architecture définie, soul.md + user.md + memory.md créés |
+## Fonctionnalités opérationnelles
+
+### Pipeline vocal desktop
+- Push-to-talk Ctrl+Space ou Ctrl+0
+- STT Groq Whisper → LLM Gemini 3.5 Flash → TTS ElevenLabs v3
+- Streaming tokens → détection fin de phrase → TTS semi-parallèle (max 2 requêtes simultanées)
+- Vision écran : "regarde mon écran" → screenshot → Gemini Vision → réponse vocale
+
+### UI Desktop (Tauri 2 + React)
+- Mode compact : orbe flottante 200×200 transparente sur le bureau, always-on-top, autostart Windows
+- Mode étendu : double clic → UI complète avec widgets contextuels
+- Widgets : agenda (événements futurs), projets actifs, fils ouverts, tâches en cours
+- Cartes staging : captures validables (👍/👎 feedback, → ok, → mem, ✕)
+- Orbe Three.js constellation : 4 états idle/listening/thinking/speaking, pulse audio
+
+### Capture et classification
+- Classify intent (Gemini, json_mode, max_tokens 2048) : CAPTURE_IDEE, TACHE, CAPTURE_PERSO, AGENDA_ADD, AGENDA_QUERY, DELETE_STAGING, SEARCH_MEMORY, SCREEN_READ, CONVERSATION
+- Extract memory auto post-turn : Gemini extrait les faits durables → stagés comme MEMORY
+- Anti-doublon classify/extract (substring match)
+- CAPTURE_IDEE → idees/<slug>.md avec enrichissement RAG (score > 0.4)
+
+### Routing intents
+- AGENDA_ADD → POST /agenda/add → agenda.md
+- AGENDA_QUERY → GET /agenda/query → réponse vocale
+- DELETE_STAGING → POST /delete_staging_by_content (sémantique)
+- TACHE → taches.md
+- CAPTURE_PERSO → profil-personnel.md
+- MEMORY validé → memory.md ou user.md
+
+### Telegram (companion.py)
+- Même pipeline que desktop : classify + extract_memory auto
+- jarvis_style.md injecté dans le prompt
+- Fallback Gemini complet (LLM_PROVIDER=gemini)
+- /save, /search, /docs, /update, /costs, /status, /help
+- Consolidation nocturne 2h, digest matinal 8h
+- Staging persistant dans staging.json
+
+### Feedback et calibration ton
+- soul.md : règles contextuelles sarcasme (dispersion, procrastination, auto-évaluation), neutre (technique, sérieux), fréquence 20-30%
+- jarvis_style.md : corpus TARS/HAL/JV1/JV2, 15 patterns, 8 few-shot examples
+- Bouton 👍/👎 desktop → enrichit jarvis_style.md automatiquement
+
+---
+
+## Bugs connus
+- Orbe en bol (clipping bas persistant)
+- Transparence mode compact pas parfaite sur Windows (DWM)
+- Références robotiques encore occasionnelles dans le ton
+
+---
+
+## Prochaines étapes
+- 1 semaine de test en conditions réelles
+- /save vocal depuis desktop
+- Sprint 2 : /update user.md vocal, recherche mémoire explicite
