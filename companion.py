@@ -2495,17 +2495,18 @@ def _hb_check_freshness() -> tuple[int, str]:
 
 def _hb_analyze_memory(memory_content: str, today: str) -> dict:
     system = _HEARTBEAT_EXTRACT_SYSTEM.replace("{seuil}", str(STALE_THREAD_DAYS))
-    response = claude.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=1000,
-        system=_cached_system(system),
-        messages=[{
-            "role": "user",
-            "content": f"Date d'aujourd'hui : {today}\n\nmemory.md :\n\n{memory_content}",
-        }],
-    )
-    _log_api_call(response, "_hb_analyze_memory")
-    raw = response.content[0].text.strip()
+    user_content = f"Date d'aujourd'hui : {today}\n\nmemory.md :\n\n{memory_content}"
+    if LLM_PROVIDER == "gemini":
+        raw = asyncio.run(_gemini_generate(system, user_content, 1000))
+    else:
+        response = claude.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=1000,
+            system=_cached_system(system),
+            messages=[{"role": "user", "content": user_content}],
+        )
+        _log_api_call(response, "_hb_analyze_memory")
+        raw = response.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```", 2)[1]
         if raw.startswith("json"):
@@ -2612,6 +2613,8 @@ def _save_consolidation_state(date: str, processed_logs: list[str]) -> None:
 
 
 def _summarize_log_haiku(log_content: str) -> str:
+    if LLM_PROVIDER == "gemini":
+        return asyncio.run(_gemini_generate(_CONSOLIDATION_SUMMARY_SYSTEM, log_content, 300))
     response = claude.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=300,
@@ -2629,14 +2632,17 @@ def _consolidate_with_sonnet(summaries_text: str, staged_text: str) -> dict:
         user_content += staged_text + "\n\n"
     user_content += f"État actuel des fichiers mémoire :\n\n{build_memory_context()}"
 
-    response = claude.messages.create(
-        model="claude-sonnet-4-5",
-        max_tokens=4096,
-        system=_cached_system(_SAVE_SYSTEM),
-        messages=[{"role": "user", "content": user_content}],
-    )
-    _log_api_call(response, "_consolidate_with_sonnet")
-    raw = response.content[0].text.strip()
+    if LLM_PROVIDER == "gemini":
+        raw = asyncio.run(_gemini_generate(_SAVE_SYSTEM, user_content, 4096))
+    else:
+        response = claude.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=4096,
+            system=_cached_system(_SAVE_SYSTEM),
+            messages=[{"role": "user", "content": user_content}],
+        )
+        _log_api_call(response, "_consolidate_with_sonnet")
+        raw = response.content[0].text.strip()
     if raw.startswith("```"):
         raw = raw.split("```")[1]
         if raw.startswith("json"):
@@ -2726,14 +2732,17 @@ def _consolidate_archive() -> None:
     if len(content) < 500:
         return
     try:
-        response = claude.messages.create(
-            model="claude-sonnet-4-5",
-            max_tokens=4096,
-            system=_ARCHIVE_CONSOLIDATION_SYSTEM,
-            messages=[{"role": "user", "content": content}],
-        )
-        _log_api_call(response, "_consolidate_archive")
-        consolidated = response.content[0].text.strip()
+        if LLM_PROVIDER == "gemini":
+            consolidated = asyncio.run(_gemini_generate(_ARCHIVE_CONSOLIDATION_SYSTEM, content, 4096))
+        else:
+            response = claude.messages.create(
+                model="claude-sonnet-4-5",
+                max_tokens=4096,
+                system=_ARCHIVE_CONSOLIDATION_SYSTEM,
+                messages=[{"role": "user", "content": content}],
+            )
+            _log_api_call(response, "_consolidate_archive")
+            consolidated = response.content[0].text.strip()
         MEMORY_ARCHIVE_MD.write_text(consolidated + "\n")
         _push_to_github(MEMORY_ARCHIVE_MD, consolidated + "\n")
         log.info(f"_consolidate_archive: {len(content)} → {len(consolidated)} chars")
