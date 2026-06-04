@@ -953,6 +953,21 @@ async fn ask_gemini_stream(
     Ok(())
 }
 
+// ── Feedback command ──────────────────────────────────────────────────────────
+#[tauri::command]
+pub async fn submit_feedback(rating: String, last_response: String) -> Result<(), String> {
+    let companion_url = std::env::var("COMPANION_URL")
+        .unwrap_or_else(|_| "http://localhost:8765".to_string());
+    let body = serde_json::json!({ "rating": rating, "content": last_response });
+    http_client()
+        .post(format!("{companion_url}/feedback"))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 // ── Public Tauri command — routes on LLM_PROVIDER ────────────────────────────
 #[tauri::command]
 pub async fn ask_claude(

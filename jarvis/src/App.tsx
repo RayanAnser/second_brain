@@ -126,6 +126,15 @@ export default function App() {
     return plain.slice(0, 130) || null;
   }, [lastAssistant]);
 
+  const [feedbackGiven, setFeedbackGiven] = useState(false);
+  useEffect(() => { setFeedbackGiven(false); }, [lastAssistant?.id]);
+
+  const handleFeedback = (rating: "good" | "bad") => {
+    if (!lastAssistant) return;
+    setFeedbackGiven(true);
+    invoke("submit_feedback", { rating, lastResponse: lastAssistant.content }).catch(console.error);
+  };
+
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -370,6 +379,24 @@ export default function App() {
             </p>
           </div>
         )}
+
+        {/* Feedback buttons — compact mode */}
+        {lastAssistant && !feedbackGiven && !isListening && (
+          <div className="absolute bottom-2 inset-x-0 flex justify-center gap-2 z-10">
+            <button
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); handleFeedback("good"); }}
+              className="w-6 h-6 flex items-center justify-center rounded-lg text-xs leading-none bg-black/50 backdrop-blur-md border border-white/25 hover:bg-indigo-900/60 hover:border-indigo-400/40 transition-all duration-150"
+              title="Bonne réponse"
+            >👍</button>
+            <button
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); handleFeedback("bad"); }}
+              className="w-6 h-6 flex items-center justify-center rounded-lg text-xs leading-none bg-black/50 backdrop-blur-md border border-white/25 hover:bg-red-900/50 hover:border-red-400/30 transition-all duration-150"
+              title="Mauvaise réponse"
+            >👎</button>
+          </div>
+        )}
       </div>
     );
   }
@@ -423,6 +450,25 @@ export default function App() {
           />
         ))}
       </div>
+
+      {/* ── Feedback buttons — extended mode (absolute on root, z-30) ── */}
+      {lastAssistant && !feedbackGiven && (
+        <div
+          className="absolute left-1/2 z-30"
+          style={{ bottom: "0.5rem", animation: "feedback-in 0.35s ease-out forwards" }}
+        >
+          <button
+            onClick={() => handleFeedback("good")}
+            className="w-7 h-7 mx-1 inline-flex items-center justify-center rounded-lg text-sm leading-none bg-black/50 backdrop-blur-md border border-white/25 hover:bg-indigo-900/60 hover:border-indigo-400/40 transition-all duration-150"
+            title="Bonne réponse"
+          >👍</button>
+          <button
+            onClick={() => handleFeedback("bad")}
+            className="w-7 h-7 mx-1 inline-flex items-center justify-center rounded-lg text-sm leading-none bg-black/50 backdrop-blur-md border border-white/25 hover:bg-red-900/50 hover:border-red-400/30 transition-all duration-150"
+            title="Mauvaise réponse"
+          >👎</button>
+        </div>
+      )}
 
       {/* ── Conversation overlay — bottom center ── */}
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[600px] z-10">

@@ -8,6 +8,7 @@
 
 ## Éducation & Associations
 - École de commerce : KEDGE (membre de la troupe d'improvisation avec Rémi et Laure)
+- Campagne BDE : Pôle communication de l'association "Les Atomix" (rencontre de Louise, Louis et Maxime), avant de rejoindre l'association Adrenaline
 - Association : Adrenaline (sport "extrême")
 - Projet majeur : Organisation du "Pékin Express" pour l'école
 
@@ -18,10 +19,10 @@
 - Tante : Louisette
 
 ## Amis
-- Louis : ami de Kedge (ami de liste), aime les jeux vidéo.
-- Louise : très bonne copine rencontrée à Kedge, vient de Nancy, son copain s'appelle Adrien.
+- Louis : ami de Kedge (rencontré via la liste BDE Les Atomix), aime les jeux vidéo.
+- Louise : très bonne copine rencontrée à Kedge (via la liste BDE Les Atomix), vient de Nancy, son copain s'appelle Adrien.
 - Victor
-- Maxime (à Metz)
+- Maxime (à Metz, rencontré via la liste BDE Les Atomix)
 
 ## Relations sentimentales
 - Crush sur Maya (capturé le 2026-05-23 — première présentation aux amis ce jour)

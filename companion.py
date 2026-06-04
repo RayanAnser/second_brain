@@ -1744,6 +1744,31 @@ async def _http_task(request):
         return aiohttp_web.Response(status=500, text=str(e))
 
 
+async def _http_feedback(request):
+    """POST /feedback {rating: "good"|"bad", content: str} — enregistre dans jarvis_style.md."""
+    try:
+        data    = await request.json()
+        rating  = str(data.get("rating", "")).strip().lower()
+        content = str(data.get("content", "")).strip()
+        if rating not in ("good", "bad"):
+            return aiohttp_web.Response(status=400, text="rating must be 'good' or 'bad'")
+        timestamp = datetime.now().strftime("%Y-%m-%d")
+        if rating == "good":
+            section = "Feedback positif (auto)"
+            entry   = f"{timestamp} — {content}"
+        else:
+            section = "Feedback négatif (auto)"
+            entry   = f"{timestamp} — {content}  _(trop sarcastique / hors sujet)_"
+        _append_to_section(STYLE_MD, section, entry)
+        if _RAG_AVAILABLE and get_rag():
+            threading.Thread(target=get_rag().index_modified, daemon=True).start()
+        log.info(f"[feedback] {rating}: {content[:80]!r}")
+        return aiohttp_web.json_response({"ok": True})
+    except Exception as e:
+        log.error(f"HTTP /feedback : {e}")
+        return aiohttp_web.Response(status=500, text=str(e))
+
+
 # ── Gemini helpers ───────────────────────────────────────────────────────────
 
 async def _gemini_generate(system: str, user_text: str, max_tokens: int, json_mode: bool = False) -> str:
@@ -2811,6 +2836,7 @@ async def on_startup(app):
         _http_app.router.add_post("/agenda/add",               _http_agenda_add)
         _http_app.router.add_get ("/agenda/query",             _http_agenda_query)
         _http_app.router.add_post("/user/update",              _http_user_update)
+        _http_app.router.add_post("/feedback",                 _http_feedback)
         runner = aiohttp_web.AppRunner(_http_app)
         await runner.setup()
         site = aiohttp_web.TCPSite(runner, "0.0.0.0", 8765)

@@ -1,7 +1,7 @@
 use tauri::{LogicalSize, window::Color};
 
-const COMPACT_W: f64 = 380.0;
-const COMPACT_H: f64 = 520.0;
+const COMPACT_W: f64 = 200.0;
+const COMPACT_H: f64 = 200.0;
 const EXTENDED_W: f64 = 1200.0;
 const EXTENDED_H: f64 = 800.0;
 

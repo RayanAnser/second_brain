@@ -132,7 +132,8 @@ export function OrbVisualizer({
     // ── Scene / Camera ─────────────────────────────────────────────────────
     const scene  = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100);
-    camera.position.z = 2.2;
+    // compact mode (!opaque): move camera closer so the orb fills the 200×200 window densely
+    camera.position.z = opaque ? 2.2 : 1.9;
 
     // ── Renderer ───────────────────────────────────────────────────────────
     // opaque=true (extended mode): alpha:false + dark clear so WebGL pixels are fully
@@ -311,7 +312,8 @@ export function OrbVisualizer({
       lineGeo.setDrawRange(0, vi);
 
       // ── Uniforms + core ───────────────────────────────────────────────────
-      ptUniforms.ptSize.value = ptSize;
+      // compact mode: enlarge particles 35% so they're visible in the small 200×200 window
+      ptUniforms.ptSize.value = ptSize * (opaque ? 1.0 : 1.35);
       ptUniforms.ptColor.value.copy(cur.colorParticle);
       lineUniforms.lineColor.value.copy(cur.colorLine);
       lineUniforms.lineOpacity.value = Math.min(1.0, 0.6 + al * 0.3);
