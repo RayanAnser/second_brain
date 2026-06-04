@@ -108,6 +108,7 @@ STAGING_FILE       = MEMORY_DIR / "staging.json"
 COMMANDS_MD        = MEMORY_DIR / "COMMANDS.md"
 AGENDA_MD          = MEMORY_DIR / "agenda.md"
 TACHES_MD          = MEMORY_DIR / "taches.md"
+STYLE_MD            = MEMORY_DIR / "jarvis_style.md"
 CONSOLIDATION_FILE  = MEMORY_DIR / "last_consolidation.json"
 RAG_DB              = MEMORY_DIR / "embeddings" / "index.db"
 MEMORY_ARCHIVE_MD   = MEMORY_DIR / "memory_archive.md"
@@ -187,7 +188,7 @@ def load_context() -> str:
     if _context_cache is not None and now - _context_cache[0] < _CONTEXT_TTL:
         return _context_cache[1]
     parts = []
-    for path, label in [(SOUL_MD, "SOUL"), (USER_MD, "USER"), (MEMORY_MD, "MEMORY")]:
+    for path, label in [(SOUL_MD, "SOUL"), (STYLE_MD, "STYLE"), (USER_MD, "USER"), (MEMORY_MD, "MEMORY")]:
         if path.exists():
             parts.append(f"<{label}>\n{path.read_text()}\n</{label}>")
         else:
@@ -407,6 +408,7 @@ Fichiers mémoire disponibles :
 - memory/projets/<slug>.md  : un fichier par projet (crée si nouveau projet substantiel)
 - memory/concepts/<slug>.md : un fichier par concept important
 - memory/perso/<slug>.md    : infos personnelles structurées
+- memory/idees/<slug>.md    : une idée par fichier (CAPTURE_IDEE, aspirations créatives, idées en germe)
 
 Retourne UNIQUEMENT ce JSON (sans backticks, sans texte autour) :
 {
@@ -427,11 +429,64 @@ Règles :
 - replace_file uniquement pour fichiers courts < 400 mots (user.md, perso/)
 - replace_section : champ "section" obligatoire, contenu = tout ce qui va SOUS le header
 - Crée de nouveaux fichiers projets/concepts si le contenu est nouveau et substantiel
+- Pour les CAPTURE_IDEE : cible memory/idees/<slug>.md, mode replace_file, content = texte brut de l'idée (une ligne, sans markdown). Le système applique automatiquement la logique RAG anti-doublon.
 - N'écris que ce qui mérite d'être retenu durablement — ignore le small talk
 - Si rien de notable : {"ops": [], "summary": "Rien de notable à retenir."}
 - Paths relatifs depuis la racine du projet (ex: "memory/user.md")"""
 
 _CAPTURE_INTENTS = frozenset({"CAPTURE_IDEE", "CAPTURE_PROJET", "CAPTURE_CONCEPT", "CAPTURE_PERSO"})
+
+_MEMORY_EXTRACT_SYSTEM = """\
+Analyse cet échange. Extrais les faits nouveaux durables méritant mémorisation long terme.
+Ignore : small talk, questions banales, reformulations génériques, réponses courtes sans contenu.
+Si rien de mémorable, retourne [].
+Format JSON uniquement : [{"content": "fait concis", "section": "memory"}]
+section = "user" pour préférences/infos personnelles sur l'utilisateur.
+section = "memory" pour projets, décisions, idées importantes, concepts."""
+
+
+async def _extract_and_stage_memory(
+    user_text: str,
+    assistant_text: str,
+    user_id: int,
+    already_staged: list[str] = [],
+) -> None:
+    if len(assistant_text.strip()) < 30:
+        return
+    prompt = f"USER: {user_text}\n\nASSISTANT: {assistant_text}"
+    try:
+        if LLM_PROVIDER == "gemini":
+            raw = await _gemini_generate(_MEMORY_EXTRACT_SYSTEM, prompt, 600)
+        else:
+            response = claude.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=300,
+                system=_cached_system(_MEMORY_EXTRACT_SYSTEM),
+                messages=[{"role": "user", "content": prompt}],
+            )
+            _log_api_call(response, "_extract_and_stage_memory")
+            raw = response.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        items = json.loads(raw)
+        if not isinstance(items, list):
+            return
+        for item in items:
+            content = item.get("content", "").strip()
+            section = item.get("section", "memory")
+            if not content:
+                continue
+            content_lower = content.lower()
+            if any(content_lower in s.lower() or s.lower() in content_lower for s in already_staged):
+                log.info(f"[extract_memory] skip doublon: {content!r}")
+                continue
+            stage_capture(user_id, content, "MEMORY", section)
+            log.info(f"[extract_memory] stagé [{section}]: {content!r}")
+    except Exception as e:
+        log.warning(f"_extract_and_stage_memory échoué ({e})")
 
 
 async def _research_task(slug: str, query: str, chat_id: int, bot):
@@ -564,6 +619,42 @@ async def save_intelligently(user_id: int) -> dict:
     return json.loads(raw)
 
 
+def _commit_idee(content: str) -> None:
+    """Enrichit un fichier idees/ existant (RAG score > 0.4) ou en crée un nouveau."""
+    IDEES_DIR.mkdir(parents=True, exist_ok=True)
+    content = content.strip().split("\n")[0].lstrip("# ").strip()
+    if not content:
+        return
+    slug = _make_slug(content)
+    timestamp = datetime.now().strftime("%Y-%m-%d")
+    entry_line = f"{content}  _(jarvis, {timestamp})_"
+    log.info(f"[commit_idee] content={content!r}")
+
+    best_hit = None
+    best_score = 0.0
+    if _RAG_AVAILABLE and get_rag():
+        raw_results = get_rag().search(content, top_k=3)
+        hits = [r for r in raw_results if str(IDEES_DIR) in r.source_path]
+        if hits:
+            best_hit = hits[0]
+            best_score = hits[0].score
+    log.info(f"[commit_idee] RAG best={Path(best_hit.source_path).stem if best_hit else 'none'} score={best_score:.2f}")
+
+    if best_hit and best_score > 0.4:
+        best_path = Path(best_hit.source_path)
+        _append_to_section(best_path, "Enrichissements", entry_line)
+        _push_to_github(best_path, best_path.read_text())
+        log.info(f"[commit_idee] enrichissement: {best_path.stem} ← {content!r}")
+    else:
+        target = IDEES_DIR / f"{slug}.md"
+        target.write_text(f"# {content}\n\n_{timestamp}_\n")
+        _push_to_github(target, target.read_text())
+        log.info(f"[commit_idee] nouveau: {slug}.md ← {content!r}")
+
+    if _RAG_AVAILABLE and get_rag():
+        threading.Thread(target=get_rag().index_modified, daemon=True).start()
+
+
 def execute_ops(ops: list) -> list[str]:
     _invalidate_context_cache()
     modified = []
@@ -574,6 +665,13 @@ def execute_ops(ops: list) -> list[str]:
             mode    = op["mode"]
             content = op.get("content", "")
             path.parent.mkdir(parents=True, exist_ok=True)
+
+            if path.parent.name == "idees":
+                _commit_idee(content)
+                modified.append(op["path"])
+                log.info(f"execute_ops : {op['path']} [commit_idee] — {op.get('reason', '')}")
+                continue
+
             existing = path.read_text() if path.exists() else ""
 
             if mode == "append":
@@ -1592,39 +1690,7 @@ async def _http_staging_confirm(request):
             _append_to_section(PROFIL_PERSO_MD, "Notes automatiques", entry_line)
             _push_to_github(PROFIL_PERSO_MD, PROFIL_PERSO_MD.read_text())
         elif hint == "CAPTURE_IDEE":
-            IDEES_DIR.mkdir(parents=True, exist_ok=True)
-            slug = _make_slug(content)
-            log.info(f"[idees] content={content!r}")
-            log.info(f"[idees] IDEES_DIR={str(IDEES_DIR)!r}")
-
-            # RAG décide toujours — slug sert uniquement de fallback pour le nom du fichier
-            best_hit   = None
-            best_score = 0.0
-            if _RAG_AVAILABLE and get_rag():
-                raw_results = get_rag().search(content, top_k=3)
-                log.info(f"[idees] RAG results: {len(raw_results)} résultats")
-                for i, r in enumerate(raw_results):
-                    log.info(f"[idees] RAG result[{i}]: score={r.score:.2f} path={r.source_path!r}")
-                hits = [r for r in raw_results if str(IDEES_DIR) in r.source_path]
-                log.info(f"[idees] après filtre idees/: {len(hits)} résultats")
-                if hits:
-                    best_hit   = hits[0]
-                    best_score = hits[0].score
-            log.info(f"[idees] seuil: best_score={best_score:.2f} threshold=0.4")
-            log.info(f"[idees] RAG best match: {Path(best_hit.source_path).stem if best_hit else 'none'} score={best_score:.2f}")
-
-            if best_hit and best_score > 0.4:
-                best_path = Path(best_hit.source_path)
-                log.info(f"[idees] decision: enrichir {best_path.stem}")
-                _append_to_section(best_path, "Enrichissements", entry_line)
-                _push_to_github(best_path, best_path.read_text())
-                log.info(f"[idees] enrichissement: {best_path.stem} ← {content!r}")
-            else:
-                target = IDEES_DIR / f"{slug}.md"
-                log.info(f"[idees] decision: créer {slug}")
-                target.write_text(f"# {content}\n\n_{timestamp}_\n")
-                _push_to_github(target, target.read_text())
-                log.info(f"[staging_confirm] CAPTURE_IDEE créé → {target.name}")
+            _commit_idee(content)
         else:
             # CAPTURE_CONCEPT, CAPTURE_PROJET
             _append_to_section(MEMORY_MD, "Captures confirmées", entry_line)
@@ -1758,6 +1824,7 @@ async def _ask_gemini(
 
     history.append({"role": "assistant", "content": full_text})
     session_logs[user_id].append(f"ASSISTANT : {full_text}")
+    asyncio.create_task(_extract_and_stage_memory(user_message, full_text, user_id))
     return full_text
 
 
@@ -1814,6 +1881,7 @@ async def ask_claude(
     reply = response.content[0].text
     history.append({"role": "assistant", "content": reply})
     session_logs[user_id].append(f"ASSISTANT : {reply}")
+    asyncio.create_task(_extract_and_stage_memory(user_message, reply, user_id))
     return reply
 
 
