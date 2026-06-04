@@ -468,7 +468,7 @@ async def _extract_and_stage_memory(
     prompt = f"USER: {user_text}\n\nASSISTANT: {assistant_text}"
     try:
         if LLM_PROVIDER == "gemini":
-            raw = await _gemini_generate(_MEMORY_EXTRACT_SYSTEM, prompt, 1024)
+            raw = await _gemini_generate(_MEMORY_EXTRACT_SYSTEM, prompt, 1024, json_mode=True)
         else:
             response = claude.messages.create(
                 model="claude-haiku-4-5-20251001",
@@ -478,9 +478,9 @@ async def _extract_and_stage_memory(
             )
             _log_api_call(response, "_extract_and_stage_memory")
             raw = response.content[0].text.strip()
-        log.info(f"[extract_memory] raw_before_strip={raw!r}")
+        log.info(f"[extract_memory] len_before={len(raw)} raw_before_strip={raw!r}")
         raw = _strip_to_json(raw)
-        log.info(f"[extract_memory] raw_after_strip={raw!r}")
+        log.info(f"[extract_memory] len_after={len(raw)} raw_after_strip={raw!r}")
         items = json.loads(raw)
         if not isinstance(items, list):
             return
@@ -806,7 +806,7 @@ async def classify_intent(text: str) -> dict:
             raw = await _gemini_generate(
                 _INTENT_SYSTEM,
                 f"{date_ctx}\n{text}",
-                500,
+                512,
                 json_mode=True,
             )
         else:
@@ -818,7 +818,7 @@ async def classify_intent(text: str) -> dict:
             )
             _log_api_call(response, "classify_intent")
             raw = response.content[0].text.strip()
-        log.info(f"classify_intent raw_before_strip={raw!r}")
+        log.info(f"classify_intent len={len(raw)} raw_before_strip={raw!r}")
         raw = _strip_to_json(raw)
         log.info(f"classify_intent raw_after_strip={raw!r}")
         result = json.loads(raw)
