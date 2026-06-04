@@ -806,7 +806,7 @@ async def classify_intent(text: str) -> dict:
             raw = await _gemini_generate(
                 _INTENT_SYSTEM,
                 f"{date_ctx}\n{text}",
-                512,
+                2048,
                 json_mode=True,
             )
         else:
@@ -1761,6 +1761,9 @@ async def _gemini_generate(system: str, user_text: str, max_tokens: int, json_mo
         resp = await client.post(url, json=body)
         resp.raise_for_status()
     data = resp.json()
+    if json_mode:
+        finish_reason = data.get("candidates", [{}])[0].get("finishReason", "unknown")
+        log.info(f"[_gemini_generate] json_mode finishReason={finish_reason!r}")
     return (
         data["candidates"][0]["content"]["parts"][0]["text"].strip()
     )

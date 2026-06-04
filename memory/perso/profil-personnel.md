@@ -7,9 +7,9 @@
 - Aime aussi : steaks frites, msemen
 
 ## Éducation & Associations
-- École de commerce : KEDGE
+- École de commerce : KEDGE (membre de la troupe d'improvisation avec Rémi et Laure)
 - Association : Adrenaline (sport "extrême")
-- Projet majeur : Organisation du "Péquet Express" pour l'école
+- Projet majeur : Organisation du "Pékin Express" pour l'école
 
 ## Famille
 - Mère : Djamila
@@ -25,7 +25,7 @@
 
 ## Relations sentimentales
 - Crush sur Maya (capturé le 2026-05-23 — première présentation aux amis ce jour)
-- Aémilia (et non Amelia) : ex-petite copine ("grand-ex") _(2026-06-04)_
+- Aémilia : ex-petite copine ("grand-ex") _(2026-06-04)_
 
 ## Notes automatiques
 - est gaucher  _(jarvis, 2026-05-27)_
