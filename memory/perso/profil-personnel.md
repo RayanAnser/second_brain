@@ -42,6 +42,8 @@
 - A un rendez-vous chez le dentiste et chez le podologue mardi 7 juin.  _(jarvis, 2026-05-28)_
 - au badminton je suis droitier  _(jarvis, 2026-06-03)_
 
+- Mon collège s'appelait le collège Champfleury  _(jarvis, 2026-06-04)_
+- Mon lycée s'appelait le lycée Saint-Joseph  _(jarvis, 2026-06-04)_
 ## Connaissances d'Avignon
 - Alice : Product Designer. Amie du lycée.
 - Sacha : Customer Success Manager. Ami du lycée.
