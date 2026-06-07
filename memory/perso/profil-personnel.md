@@ -23,6 +23,7 @@
 - Louise : très bonne copine rencontrée à Kedge (via la liste BDE Les Atomix), vient de Nancy, son copain s'appelle Adrien.
 - Victor
 - Maxime (à Metz, rencontré via la liste BDE Les Atomix)
+- Sam : amie, a un copain (sentiment de distance lors des retrouvailles de juin 2026)
 
 ## Relations sentimentales
 - Crush sur Maya (capturé le 2026-05-23 — première présentation aux amis ce jour)
