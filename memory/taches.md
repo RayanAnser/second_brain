@@ -9,8 +9,7 @@
 - acheter des brocolis, des carottes et des poireaux  _(2026-05-28)_
 - acheter des poireaux  _(2026-05-28)_
 - Acheter billets pour Metz  _(2026-05-29)_
--   _(2026-05-29)_
 - Faire un résumé de l'ère du vide de Lipovetsky  _(2026-05-30)_
 - appeler le fleuriste  _(2026-06-03)_
 - faire un tutoriel pour l'intégration Mac pour Alice  _(2026-06-03)_
-- Prendre rendez-vous à la banque (semaine du 8 juin) pour le prêt de l'appartement à Avignon  _(2026-06-08)_
+- Appeler la banque la semaine du 18 juin pour le prêt pour acheter l'appartement à Avignon  _(2026-06-08)_
