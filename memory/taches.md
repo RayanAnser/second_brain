@@ -13,3 +13,4 @@
 - Faire un résumé de l'ère du vide de Lipovetsky  _(2026-05-30)_
 - appeler le fleuriste  _(2026-06-03)_
 - faire un tutoriel pour l'intégration Mac pour Alice  _(2026-06-03)_
+- Prendre rendez-vous à la banque (semaine du 8 juin) pour le prêt de l'appartement à Avignon  _(2026-06-08)_
