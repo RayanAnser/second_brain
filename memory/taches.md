@@ -13,3 +13,4 @@
 - appeler le fleuriste  _(2026-06-03)_
 - faire un tutoriel pour l'intégration Mac pour Alice  _(2026-06-03)_
 - Appeler la banque la semaine du 18 juin pour le prêt pour acheter l'appartement à Avignon  _(2026-06-08)_
+- Prendre rendez-vous avec la banque pour des simulations de prêts (achat appartement) et repenser le fonctionnement du système de tâches et d'agenda.  _(2026-06-09)_
