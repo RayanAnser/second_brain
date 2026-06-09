@@ -38,10 +38,9 @@
 
 ## 🔵 Contexte personnel
 - Focus actuel : construction et adoption du compagnon IA
+- Période d'épuisement professionnel intense et de grande fatigue mentale (juin 2026), cumulée avec le contrecoup de sa relation avec son ex Emilia.
 - Frein identifié : flou sur l'usage concret au quotidien (2-3/10 en mai 2026, phase d'exploration)
 - Premier usage intensif vocal : 2026-05-23
-
----
 
 ## Fils ouverts
 - Mardi 9 juin 17h : rendez-vous avec Ségolène
