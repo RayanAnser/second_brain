@@ -303,12 +303,19 @@ def _compute_cost(model: str, input_tokens: int, output_tokens: int,
 
 
 def _log_cost_entry(entry: dict) -> None:
-    """Appends one JSON line to costs.jsonl. Thread-safe (open+write is atomic on Linux)."""
+    """Appends one JSON line to costs.jsonl, then syncs to GitHub if token is set."""
     try:
         COSTS_FILE.parent.mkdir(parents=True, exist_ok=True)
         entry.setdefault("timestamp", datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
         with COSTS_FILE.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        if GITHUB_TOKEN:
+            content = COSTS_FILE.read_text(encoding="utf-8")
+            threading.Thread(
+                target=_push_to_github,
+                args=(COSTS_FILE, content),
+                daemon=True,
+            ).start()
     except Exception as e:
         log.warning(f"_log_cost_entry échoué : {e}")
 
