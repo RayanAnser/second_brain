@@ -1,1 +1,15 @@
-{}
+{
+  "7649220324": [
+    {
+      "content": "Joue au jeu Arshton",
+      "hint": "CAPTURE_PERSO",
+      "timestamp": "2026-06-04 20:52"
+    },
+    {
+      "content": "Préfère que le niveau de sarcasme de l'assistant soit limité à 20 %.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-04 20:55",
+      "section": "user"
+    }
+  ]
+}
