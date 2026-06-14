@@ -501,7 +501,10 @@ async def _extract_and_stage_memory(
 
 async def _research_task(slug: str, query: str, chat_id: int, bot):
     try:
-        result = await run_research(slug, query, MEMORY_DIR, claude)
+        if LLM_PROVIDER == "gemini":
+            result = await run_research(slug, query, MEMORY_DIR, gemini_post_fn=_gemini_post)
+        else:
+            result = await run_research(slug, query, MEMORY_DIR, claude)
         await bot.send_message(chat_id=chat_id, text=result.summary, parse_mode="HTML")
         await bot.send_document(
             chat_id=chat_id,
@@ -1770,6 +1773,15 @@ async def _http_feedback(request):
 
 
 # ── Gemini helpers ───────────────────────────────────────────────────────────
+
+async def _gemini_post(body: dict) -> dict:
+    """Raw HTTP POST to Gemini generateContent — returns the full response JSON."""
+    url = f"{_GEMINI_BASE}:generateContent?key={GEMINI_KEY}"
+    async with httpx.AsyncClient(timeout=60) as client:
+        resp = await client.post(url, json=body)
+        resp.raise_for_status()
+    return resp.json()
+
 
 async def _gemini_generate(system: str, user_text: str, max_tokens: int, json_mode: bool = False) -> str:
     """Non-streaming generateContent — retourne le texte brut de la réponse."""

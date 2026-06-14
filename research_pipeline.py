@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+from collections.abc import Awaitable, Callable
+
 import anthropic
 from notebooklm import NotebookLMClient
 
@@ -31,6 +33,50 @@ _SYNTHESIS_QUESTION = (
     "Synthétise en français les points clés, les concepts importants "
     "et les informations pratiques à retenir sur ce sujet."
 )
+
+
+_GeminiPostFn = Callable[[dict], Awaitable[dict]]
+
+
+async def _find_urls_gemini(query: str, gemini_post_fn: _GeminiPostFn) -> list[str]:
+    """URL finder using Gemini native Google Search grounding.
+
+    Sends a generateContent request with tools=[{"google_search": {}}].
+    Real URLs come from groundingMetadata.groundingChunks[].web.uri.
+    Falls back to regex over the text response if grounding returns nothing.
+    """
+    body = {
+        "contents": [{"role": "user", "parts": [{"text": f"Trouve des sources sur : {query}"}]}],
+        "tools": [{"google_search": {}}],
+        "generationConfig": {"maxOutputTokens": 256},
+    }
+    data = await gemini_post_fn(body)
+
+    candidate = data.get("candidates", [{}])[0]
+    grounding = candidate.get("groundingMetadata", {})
+    chunks = grounding.get("groundingChunks", [])
+
+    urls: list[str] = []
+    for chunk in chunks:
+        uri = chunk.get("web", {}).get("uri", "")
+        if uri.startswith("http"):
+            urls.append(uri)
+
+    log.info(f"_find_urls_gemini: {len(chunks)} chunk(s) grounding → {len(urls)} URL(s) extraite(s)")
+    for i, u in enumerate(urls):
+        log.info(f"_find_urls_gemini:   [{i}] {u}")
+
+    if not urls:
+        log.warning("_find_urls_gemini: aucun groundingChunk, fallback regex sur le texte")
+        text = (
+            candidate.get("content", {})
+            .get("parts", [{}])[0]
+            .get("text", "")
+        )
+        urls = re.findall(r'https?://[^\s\'"<>)]+', text)
+
+    seen: set[str] = set()
+    return [u for u in urls if not (u in seen or seen.add(u))][:5]  # type: ignore[func-returns-value]
 
 
 def _find_urls(claude_client: anthropic.Anthropic, query: str) -> list[str]:
@@ -118,13 +164,23 @@ async def run_research(
     slug: str,
     query: str,
     memory_dir: Path,
-    claude_client: anthropic.Anthropic,
+    claude_client: anthropic.Anthropic | None = None,
+    *,
+    gemini_post_fn: _GeminiPostFn | None = None,
 ) -> ResearchResult:
-    """Full pipeline. Returns a ResearchResult with summary, concept_file, and notebook_id."""
-    log.info(f"research_pipeline: démarrage slug={slug!r}")
+    """Full pipeline. Returns a ResearchResult with summary, concept_file, and notebook_id.
+
+    Exactly one of claude_client or gemini_post_fn must be provided.
+    """
+    if claude_client is None and gemini_post_fn is None:
+        raise ValueError("Provide either claude_client or gemini_post_fn.")
+    log.info(f"research_pipeline: démarrage slug={slug!r} provider={'gemini' if gemini_post_fn else 'claude'}")
 
     # 1. Web search → URLs
-    urls = _find_urls(claude_client, query)
+    if gemini_post_fn is not None:
+        urls = await _find_urls_gemini(query, gemini_post_fn)
+    else:
+        urls = _find_urls(claude_client, query)  # type: ignore[arg-type]
     if not urls:
         raise RuntimeError("Aucune URL trouvée par web_search.")
     log.info(f"research_pipeline: {len(urls)} URL(s) → {urls}")
