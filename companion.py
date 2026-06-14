@@ -130,9 +130,10 @@ MEMORY_ACTIVE_MAX   = 6000
 claude = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
 groq   = Groq(api_key=GROQ_KEY)
 
-LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "claude").lower()
-GEMINI_KEY   = os.environ.get("GEMINI_API_KEY", "")
-_GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash"
+LLM_PROVIDER   = os.environ.get("LLM_PROVIDER", "claude").lower()
+GEMINI_KEY     = os.environ.get("GEMINI_API_KEY", "")
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY", "")
+_GEMINI_BASE   = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash"
 
 # ── State ────────────────────────────────────────────────────────────────────
 conversations:       dict[int, list] = {}  # historique par user
@@ -502,7 +503,7 @@ async def _extract_and_stage_memory(
 async def _research_task(slug: str, query: str, chat_id: int, bot):
     try:
         if LLM_PROVIDER == "gemini":
-            result = await run_research(slug, query, MEMORY_DIR, gemini_post_fn=_gemini_post)
+            result = await run_research(slug, query, MEMORY_DIR, tavily_api_key=TAVILY_API_KEY)
         else:
             result = await run_research(slug, query, MEMORY_DIR, claude)
         await bot.send_message(chat_id=chat_id, text=result.summary, parse_mode="HTML")
@@ -1773,15 +1774,6 @@ async def _http_feedback(request):
 
 
 # ── Gemini helpers ───────────────────────────────────────────────────────────
-
-async def _gemini_post(body: dict) -> dict:
-    """Raw HTTP POST to Gemini generateContent — returns the full response JSON."""
-    url = f"{_GEMINI_BASE}:generateContent?key={GEMINI_KEY}"
-    async with httpx.AsyncClient(timeout=60) as client:
-        resp = await client.post(url, json=body)
-        resp.raise_for_status()
-    return resp.json()
-
 
 async def _gemini_generate(system: str, user_text: str, max_tokens: int, json_mode: bool = False) -> str:
     """Non-streaming generateContent — retourne le texte brut de la réponse."""
