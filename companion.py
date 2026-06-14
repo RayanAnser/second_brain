@@ -267,11 +267,28 @@ def save_raw_log(user_id: int):
 
 COSTS_FILE = LOGS_DIR / "costs.jsonl"
 
+# Pricing — juin 2026
 _MODEL_PRICES: dict[str, tuple[float, float]] = {
+    # Claude ($/1M tokens: input, output)
     "claude-sonnet-4-5":         (3.00,  15.00),
-    "claude-haiku-4-5-20251001": (0.25,   1.25),
-    "claude-haiku-4-5":          (0.25,   1.25),
+    "claude-sonnet-4-6":         (3.00,  15.00),
+    "claude-haiku-4-5-20251001": (1.00,   5.00),
+    "claude-haiku-4-5":          (1.00,   5.00),
+    "claude-opus-4-8":           (5.00,  25.00),
+    # Gemini
+    "gemini-3.5-flash":          (1.50,   9.00),
 }
+
+_GROQ_WHISPER_PER_SECOND = 0.04 / 3600        # $0.04/heure audio
+_ELEVENLABS_PER_CHAR     = 0.22 / 1000        # $0.22/1000 chars (overage Starter plan)
+_OPENAI_EMBED_PER_TOKEN  = 0.02 / 1_000_000   # $0.02/1M tokens (text-embedding-3-small)
+
+_SUBSCRIPTIONS = [
+    ("Claude Pro (claude.ai)",   "Pro",     20.00),
+    ("Google AI Plus (Gemini)",  "AI Plus",  4.99),
+    ("ElevenLabs",               "Starter",  6.00),
+]
+_SUBS_TOTAL = sum(s[2] for s in _SUBSCRIPTIONS)  # 30.99
 
 
 def _compute_cost(model: str, input_tokens: int, output_tokens: int,
@@ -285,31 +302,53 @@ def _compute_cost(model: str, input_tokens: int, output_tokens: int,
     ) / 1_000_000
 
 
-def _log_api_call(response, function: str) -> None:
+def _log_cost_entry(entry: dict) -> None:
+    """Appends one JSON line to costs.jsonl. Thread-safe (open+write is atomic on Linux)."""
     try:
-        LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        usage = response.usage
-        model = response.model
-        cache_read = getattr(usage, "cache_read_input_tokens", 0) or 0
-        cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
-        entry = {
-            "timestamp": datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
-            "model": model,
-            "input_tokens": usage.input_tokens,
-            "output_tokens": usage.output_tokens,
-            "cache_read_tokens": cache_read,
-            "cache_creation_tokens": cache_creation,
-            "cost_usd": round(
-                _compute_cost(model, usage.input_tokens, usage.output_tokens,
-                               cache_read, cache_creation),
-                6,
-            ),
-            "function": function,
-        }
+        COSTS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        entry.setdefault("timestamp", datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
         with COSTS_FILE.open("a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
     except Exception as e:
+        log.warning(f"_log_cost_entry échoué : {e}")
+
+
+def _log_api_call(response, function: str) -> None:
+    try:
+        usage          = response.usage
+        model          = response.model
+        cache_read     = getattr(usage, "cache_read_input_tokens",    0) or 0
+        cache_creation = getattr(usage, "cache_creation_input_tokens", 0) or 0
+        _log_cost_entry({
+            "service":               "claude",
+            "model":                 model,
+            "function":              function,
+            "input_tokens":          usage.input_tokens,
+            "output_tokens":         usage.output_tokens,
+            "cache_read_tokens":     cache_read,
+            "cache_creation_tokens": cache_creation,
+            "cost_usd": round(
+                _compute_cost(model, usage.input_tokens, usage.output_tokens,
+                               cache_read, cache_creation), 6),
+        })
+    except Exception as e:
         log.warning(f"_log_api_call échoué : {e}")
+
+
+def _log_gemini_usage(data: dict, function: str) -> None:
+    usage = data.get("usageMetadata", {})
+    if not usage:
+        return
+    input_t  = usage.get("promptTokenCount",     0)
+    output_t = usage.get("candidatesTokenCount", 0)
+    _log_cost_entry({
+        "service":       "gemini",
+        "model":         "gemini-3.5-flash",
+        "function":      function,
+        "input_tokens":  input_t,
+        "output_tokens": output_t,
+        "cost_usd":      round(_compute_cost("gemini-3.5-flash", input_t, output_t), 6),
+    })
 
 
 # ── User profile update ──────────────────────────────────────────────────────
@@ -324,7 +363,7 @@ async def extract_user_update(request: str) -> str:
     )
     user_text = f"user.md actuel :\n\n{current}\n\nDemande : {request}"
     if LLM_PROVIDER == "gemini":
-        return await _gemini_generate(_UPDATE_SYSTEM, user_text, 400)
+        return await _gemini_generate(_UPDATE_SYSTEM, user_text, 400, _fn="extract_user_update")
     response = claude.messages.create(
         model="claude-sonnet-4-5",
         max_tokens=400,
@@ -469,7 +508,8 @@ async def _extract_and_stage_memory(
     prompt = f"USER: {user_text}\n\nASSISTANT: {assistant_text}"
     try:
         if LLM_PROVIDER == "gemini":
-            raw = await _gemini_generate(_MEMORY_EXTRACT_SYSTEM, prompt, 1024, json_mode=True)
+            raw = await _gemini_generate(_MEMORY_EXTRACT_SYSTEM, prompt, 1024,
+                                         json_mode=True, _fn="_extract_and_stage_memory")
         else:
             response = claude.messages.create(
                 model="claude-haiku-4-5-20251001",
@@ -617,7 +657,7 @@ async def save_intelligently(user_id: int) -> dict:
     user_content += f"État actuel des fichiers mémoire :\n\n{build_memory_context()}"
 
     if LLM_PROVIDER == "gemini":
-        raw = await _gemini_generate(_SAVE_SYSTEM, user_content, 6000)
+        raw = await _gemini_generate(_SAVE_SYSTEM, user_content, 6000, _fn="save_intelligently")
     else:
         response = claude.messages.create(
             model="claude-sonnet-4-5",
@@ -814,6 +854,7 @@ async def classify_intent(text: str) -> dict:
                 f"{date_ctx}\n{text}",
                 2048,
                 json_mode=True,
+                _fn="classify_intent",
             )
         else:
             response = claude.messages.create(
@@ -1450,6 +1491,161 @@ def _delete_staging_by_content(query: str) -> str | None:
     return None
 
 
+def _read_cost_entries() -> list[dict]:
+    if not COSTS_FILE.exists():
+        return []
+    entries = []
+    for line in COSTS_FILE.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            pass
+    return entries
+
+
+def _build_dashboard_html() -> str:
+    entries = _read_cost_entries()
+    now   = datetime.now()
+    today = now.date()
+
+    def parse_date(ts: str):
+        try:
+            return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S").date()
+        except Exception:
+            return None
+
+    def in_window(e, days):
+        d = parse_date(e.get("timestamp", ""))
+        return d is not None and (today - d).days < days
+
+    e1d  = [e for e in entries if in_window(e, 1)]
+    e7d  = [e for e in entries if in_window(e, 7)]
+    e30d = [e for e in entries if in_window(e, 30)]
+
+    _SVC_LABELS = {
+        "claude":         "Claude (Anthropic)",
+        "gemini":         "Gemini (Google)",
+        "groq_stt":       "Groq Whisper (STT)",
+        "elevenlabs_tts": "ElevenLabs (TTS)",
+        "openai_embed":   "OpenAI Embeddings",
+        "tavily":         "Tavily Search",
+    }
+    _SVC_ORDER = list(_SVC_LABELS.keys())
+
+    def agg(lst):
+        totals: dict[str, list] = {}
+        for e in lst:
+            svc = e.get("service", "unknown")
+            cost = e.get("cost_usd", 0.0)
+            if svc not in totals:
+                totals[svc] = [0, 0.0]  # [calls, cost]
+            totals[svc][0] += 1
+            totals[svc][1] += cost
+        return totals
+
+    a1d, a7d, a30d, aall = agg(e1d), agg(e7d), agg(e30d), agg(entries)
+
+    def fmt_cost(v):
+        return f"${v:.4f}" if v >= 0.001 else (f"${v:.6f}" if v > 0 else "—")
+
+    def row(svc):
+        label = _SVC_LABELS.get(svc, svc)
+        c1  = a1d.get(svc,  [0, 0.0])
+        c7  = a7d.get(svc,  [0, 0.0])
+        c30 = a30d.get(svc, [0, 0.0])
+        cal = aall.get(svc, [0, 0.0])
+        def cell(c): return f'<td class="num">{fmt_cost(c[1])}<br><span class="calls">{c[0]} appel{"s" if c[0]!=1 else ""}</span></td>'
+        return f"<tr><td>{label}</td>{cell(c1)}{cell(c7)}{cell(c30)}{cell(cal)}</tr>"
+
+    all_svcs = _SVC_ORDER + [s for s in set(a.keys() for a in [aall]) if s not in _SVC_ORDER]  # type: ignore[misc]
+    api_rows = "\n".join(row(s) for s in _SVC_ORDER)
+
+    total_api_30d = sum(c[1] for c in a30d.values())
+    total_all     = sum(c[1] for c in aall.values())
+
+    subs_rows = "\n".join(
+        f"<tr><td>{name}</td><td>{plan}</td><td class='num'>${cost:.2f}</td></tr>"
+        for name, plan, cost in _SUBSCRIPTIONS
+    )
+
+    ts = now.strftime("%Y-%m-%d %H:%M:%S")
+
+    return f"""<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="refresh" content="60">
+<title>Jarvis — Dashboard Coûts</title>
+<style>
+  *{{box-sizing:border-box;margin:0;padding:0}}
+  body{{font-family:'Courier New',monospace;background:#0a0a0a;color:#d0d0d0;padding:32px;max-width:900px}}
+  h1{{color:#fff;font-size:20px;margin-bottom:4px;letter-spacing:1px}}
+  .sub{{color:#444;font-size:11px;margin-bottom:32px}}
+  h2{{color:#888;font-size:11px;text-transform:uppercase;letter-spacing:3px;margin:28px 0 12px}}
+  table{{width:100%;border-collapse:collapse;font-size:13px}}
+  th{{color:#555;font-size:10px;text-transform:uppercase;letter-spacing:1px;padding:6px 10px;border-bottom:1px solid #1a1a1a;text-align:left}}
+  td{{padding:8px 10px;border-bottom:1px solid #111;vertical-align:top}}
+  .num{{text-align:right;color:#64b5f6;font-size:13px}}
+  .calls{{color:#444;font-size:10px}}
+  tr:hover td{{background:#0f0f0f}}
+  .total td{{color:#fff;font-weight:bold;border-top:1px solid #333;border-bottom:none}}
+  .grand td{{color:#ffcc02;font-weight:bold;font-size:15px;border-top:2px solid #333;padding-top:14px}}
+  .zero{{color:#2a2a2a}}
+</style>
+</head>
+<body>
+<h1>JARVIS · DASHBOARD COÛTS</h1>
+<p class="sub">Actualisé le {ts} · Rafraîchissement auto 60 s</p>
+
+<h2>Abonnements mensuels fixes</h2>
+<table>
+<tr><th>Service</th><th>Plan</th><th style="text-align:right">$/mois</th></tr>
+{subs_rows}
+<tr class="total"><td colspan="2">Total fixe</td><td class="num">${_SUBS_TOTAL:.2f}</td></tr>
+</table>
+
+<h2>Coûts API</h2>
+<table>
+<tr>
+  <th>Service</th>
+  <th style="text-align:right">Aujourd'hui</th>
+  <th style="text-align:right">7 jours</th>
+  <th style="text-align:right">30 jours</th>
+  <th style="text-align:right">Total</th>
+</tr>
+{api_rows}
+<tr class="total">
+  <td>Total API</td>
+  <td class="num">{fmt_cost(sum(c[1] for c in a1d.values()))}</td>
+  <td class="num">{fmt_cost(sum(c[1] for c in a7d.values()))}</td>
+  <td class="num">{fmt_cost(total_api_30d)}</td>
+  <td class="num">{fmt_cost(total_all)}</td>
+</tr>
+</table>
+
+<h2>Coût total estimé ce mois</h2>
+<table>
+<tr><th>Catégorie</th><th style="text-align:right">Montant</th></tr>
+<tr><td>Abonnements fixes</td><td class="num">${_SUBS_TOTAL:.2f}</td></tr>
+<tr><td>API (30 derniers jours)</td><td class="num">{fmt_cost(total_api_30d)}</td></tr>
+<tr class="grand"><td>TOTAL ESTIMÉ</td><td class="num">${_SUBS_TOTAL + total_api_30d:.2f}</td></tr>
+</table>
+</body>
+</html>"""
+
+
+async def _http_dashboard(request):
+    html_content = _build_dashboard_html()
+    return aiohttp_web.Response(
+        text=html_content,
+        content_type="text/html",
+        charset="utf-8",
+    )
+
+
 async def _http_get_staging(request):
     captures = staged_captures.get(int(CHAT_ID), [])
     result = []
@@ -1777,7 +1973,8 @@ async def _http_feedback(request):
 
 # ── Gemini helpers ───────────────────────────────────────────────────────────
 
-async def _gemini_generate(system: str, user_text: str, max_tokens: int, json_mode: bool = False) -> str:
+async def _gemini_generate(system: str, user_text: str, max_tokens: int,
+                           json_mode: bool = False, _fn: str = "_gemini_generate") -> str:
     """Non-streaming generateContent — retourne le texte brut de la réponse."""
     url = f"{_GEMINI_BASE}:generateContent?key={GEMINI_KEY}"
     gen_config: dict = {"maxOutputTokens": max_tokens}
@@ -1795,6 +1992,7 @@ async def _gemini_generate(system: str, user_text: str, max_tokens: int, json_mo
     if json_mode:
         finish_reason = data.get("candidates", [{}])[0].get("finishReason", "unknown")
         log.info(f"[_gemini_generate] json_mode finishReason={finish_reason!r}")
+    _log_gemini_usage(data, _fn)
     return (
         data["candidates"][0]["content"]["parts"][0]["text"].strip()
     )
@@ -1842,6 +2040,7 @@ async def _ask_gemini(
     full_text = ""
     chunk_count = 0
     last_finish_reason = ""
+    usage_meta: dict = {}
     async with httpx.AsyncClient(timeout=120) as client:
         async with client.stream("POST", url, json=body) as resp:
             resp.raise_for_status()
@@ -1863,9 +2062,14 @@ async def _ask_gemini(
                         .get("text", "")
                     )
                     full_text += token
+                    u = chunk.get("usageMetadata", {})
+                    if u:
+                        usage_meta = u
                 except (json.JSONDecodeError, IndexError, KeyError):
                     pass
     log.info(f"[ask_gemini] chunks={chunk_count} finishReason={last_finish_reason!r} len={len(full_text)}")
+    if usage_meta:
+        _log_gemini_usage({"usageMetadata": usage_meta}, "ask_gemini")
 
     history.append({"role": "assistant", "content": full_text})
     session_logs[user_id].append(f"ASSISTANT : {full_text}")
@@ -2041,6 +2245,14 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await voice_file.download_to_drive(tmp_path)
         transcript = await transcribe_voice(tmp_path)
         log.info(f"Transcription : {transcript}")
+        duration_s = getattr(update.message.voice, "duration", 0) or 0
+        _log_cost_entry({
+            "service":    "groq_stt",
+            "model":      "whisper-large-v3",
+            "function":   "transcribe_voice",
+            "duration_s": duration_s,
+            "cost_usd":   round(duration_s * _GROQ_WHISPER_PER_SECOND, 6),
+        })
 
         result  = await classify_intent(transcript)
         intent  = result.get("intent", "CONVERSATION")
@@ -2542,7 +2754,7 @@ def _hb_analyze_memory(memory_content: str, today: str) -> dict:
     system = _HEARTBEAT_EXTRACT_SYSTEM.replace("{seuil}", str(STALE_THREAD_DAYS))
     user_content = f"Date d'aujourd'hui : {today}\n\nmemory.md :\n\n{memory_content}"
     if LLM_PROVIDER == "gemini":
-        raw = asyncio.run(_gemini_generate(system, user_content, 1000))
+        raw = asyncio.run(_gemini_generate(system, user_content, 1000, _fn="_hb_analyze_memory"))
     else:
         response = claude.messages.create(
             model="claude-sonnet-4-5",
@@ -2659,7 +2871,8 @@ def _save_consolidation_state(date: str, processed_logs: list[str]) -> None:
 
 def _summarize_log_haiku(log_content: str) -> str:
     if LLM_PROVIDER == "gemini":
-        return asyncio.run(_gemini_generate(_CONSOLIDATION_SUMMARY_SYSTEM, log_content, 300))
+        return asyncio.run(_gemini_generate(_CONSOLIDATION_SUMMARY_SYSTEM, log_content, 300,
+                                            _fn="_summarize_log_haiku"))
     response = claude.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=300,
@@ -2678,7 +2891,8 @@ def _consolidate_with_sonnet(summaries_text: str, staged_text: str) -> dict:
     user_content += f"État actuel des fichiers mémoire :\n\n{build_memory_context()}"
 
     if LLM_PROVIDER == "gemini":
-        raw = asyncio.run(_gemini_generate(_SAVE_SYSTEM, user_content, 4096))
+        raw = asyncio.run(_gemini_generate(_SAVE_SYSTEM, user_content, 4096,
+                                           _fn="_consolidate_with_sonnet"))
     else:
         response = claude.messages.create(
             model="claude-sonnet-4-5",
@@ -2778,7 +2992,8 @@ def _consolidate_archive() -> None:
         return
     try:
         if LLM_PROVIDER == "gemini":
-            consolidated = asyncio.run(_gemini_generate(_ARCHIVE_CONSOLIDATION_SYSTEM, content, 4096))
+            consolidated = asyncio.run(_gemini_generate(_ARCHIVE_CONSOLIDATION_SYSTEM, content, 4096,
+                                                        _fn="_consolidate_archive"))
         else:
             response = claude.messages.create(
                 model="claude-sonnet-4-5",
@@ -2843,11 +3058,13 @@ async def on_startup(app):
         _http_app.router.add_get ("/agenda/query",             _http_agenda_query)
         _http_app.router.add_post("/user/update",              _http_user_update)
         _http_app.router.add_post("/feedback",                 _http_feedback)
+        _http_app.router.add_get ("/dashboard",               _http_dashboard)
         runner = aiohttp_web.AppRunner(_http_app)
         await runner.setup()
         site = aiohttp_web.TCPSite(runner, "0.0.0.0", 8765)
         await site.start()
         log.info("HTTP companion server démarré sur localhost:8765")
+        log.info("Dashboard disponible sur http://localhost:8765/dashboard")
     else:
         log.warning("aiohttp non disponible — serveur HTTP Jarvis désactivé (pip install aiohttp)")
 

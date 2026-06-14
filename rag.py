@@ -89,11 +89,33 @@ def _get_openai_client():
     return _openai_client
 
 
+def _log_embed_cost(token_count: int) -> None:
+    try:
+        import json as _json
+        costs_file = Path(os.environ.get("MEMORY_DIR", "./memory")) / "logs" / "costs.jsonl"
+        costs_file.parent.mkdir(parents=True, exist_ok=True)
+        entry = {
+            "timestamp": __import__("datetime").datetime.now().strftime("%Y-%m-%dT%H:%M:%S"),
+            "service":     "openai_embed",
+            "model":       _OPENAI_MODEL,
+            "function":    "_embed",
+            "input_tokens": token_count,
+            "output_tokens": 0,
+            "cost_usd":    round(token_count * 0.02 / 1_000_000, 8),
+        }
+        with costs_file.open("a", encoding="utf-8") as f:
+            f.write(_json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
 def _embed(texts: list[str]) -> np.ndarray:
     """Encode une liste de textes en embeddings L2-normalisés."""
     if _OPENAI_API_KEY:
         try:
             resp = _get_openai_client().embeddings.create(model=_OPENAI_MODEL, input=texts)
+            total_tokens = resp.usage.total_tokens if hasattr(resp, "usage") and resp.usage else sum(len(t.split()) for t in texts)
+            _log_embed_cost(total_tokens)
             vecs = np.array([d.embedding for d in resp.data], dtype=np.float32)
             norms = np.linalg.norm(vecs, axis=1, keepdims=True)
             return vecs / np.maximum(norms, 1e-10)

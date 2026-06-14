@@ -5,7 +5,9 @@ Shared research pipeline: Claude web_search → NotebookLM → memory/concepts/<
 Used by both companion.py (on-demand via Telegram) and research_agent.py (cron).
 """
 
+import json
 import logging
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime
@@ -14,6 +16,19 @@ from pathlib import Path
 import anthropic
 import httpx
 from notebooklm import NotebookLMClient
+
+
+def _log_cost_research(entry: dict) -> None:
+    """Appends a cost entry to the same costs.jsonl used by companion.py."""
+    try:
+        memory_dir = Path(os.environ.get("MEMORY_DIR", "./memory"))
+        costs_file = memory_dir / "logs" / "costs.jsonl"
+        costs_file.parent.mkdir(parents=True, exist_ok=True)
+        entry.setdefault("timestamp", datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
+        with costs_file.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception as exc:
+        logging.getLogger(__name__).warning(f"_log_cost_research échoué : {exc}")
 
 
 @dataclass
@@ -55,6 +70,13 @@ async def _find_urls_tavily(query: str, tavily_api_key: str) -> list[str]:
             log.info(f"_find_urls_tavily: [{len(urls) - 1}] {url}")
 
     log.info(f"_find_urls_tavily: {len(urls)} URL(s) trouvée(s)")
+    _log_cost_research({
+        "service":  "tavily",
+        "model":    "search",
+        "function": "_find_urls_tavily",
+        "requests": 1,
+        "cost_usd": 0.0,
+    })
     return urls[:5]
 
 
