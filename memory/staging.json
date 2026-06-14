@@ -10,6 +10,18 @@
       "hint": "MEMORY",
       "timestamp": "2026-06-04 20:55",
       "section": "user"
+    },
+    {
+      "content": "Un incident en suspens concernant Notion s'élève à 96 €.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-14 14:01",
+      "section": "memory"
+    },
+    {
+      "content": "La fin de la gratuité de Fable 5 d'Anthropic est fixée au 23 juin.",
+      "hint": "MEMORY",
+      "timestamp": "2026-06-14 14:01",
+      "section": "memory"
     }
   ]
 }

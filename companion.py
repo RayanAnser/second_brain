@@ -1560,7 +1560,7 @@ def _build_dashboard_html() -> str:
         def cell(c): return f'<td class="num">{fmt_cost(c[1])}<br><span class="calls">{c[0]} appel{"s" if c[0]!=1 else ""}</span></td>'
         return f"<tr><td>{label}</td>{cell(c1)}{cell(c7)}{cell(c30)}{cell(cal)}</tr>"
 
-    all_svcs = _SVC_ORDER + [s for s in set(a.keys() for a in [aall]) if s not in _SVC_ORDER]  # type: ignore[misc]
+    all_svcs = _SVC_ORDER + [s for s in aall.keys() if s not in _SVC_ORDER]
     api_rows = "\n".join(row(s) for s in _SVC_ORDER)
 
     total_api_30d = sum(c[1] for c in a30d.values())
