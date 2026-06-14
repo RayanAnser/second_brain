@@ -153,6 +153,8 @@ async def run_research(
     """
     if claude_client is None and not tavily_api_key:
         raise ValueError("Provide either claude_client or tavily_api_key.")
+    if tavily_api_key is not None and tavily_api_key == "":
+        raise ValueError("TAVILY_API_KEY manquante ou vide dans .env")
     log.info(f"research_pipeline: démarrage slug={slug!r} provider={'tavily' if tavily_api_key else 'claude'}")
 
     # 1. Web search → URLs

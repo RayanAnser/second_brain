@@ -502,6 +502,8 @@ async def _extract_and_stage_memory(
 
 async def _research_task(slug: str, query: str, chat_id: int, bot):
     try:
+        log.info(f"[research] LLM_PROVIDER={LLM_PROVIDER}")
+        log.info(f"[research] TAVILY_API_KEY présente={bool(TAVILY_API_KEY)}")
         if LLM_PROVIDER == "gemini":
             result = await run_research(slug, query, MEMORY_DIR, tavily_api_key=TAVILY_API_KEY)
         else:
