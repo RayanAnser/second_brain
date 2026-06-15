@@ -639,3 +639,4 @@
 {"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 5, "cost_usd": 5.6e-05, "timestamp": "2026-06-15T13:37:09"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 697, "output_tokens": 45, "cost_usd": 0.00145, "timestamp": "2026-06-15T13:37:18"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 659, "output_tokens": 41, "cost_usd": 0.001357, "timestamp": "2026-06-15T13:40:37"}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "save_intelligently", "input_tokens": 11478, "output_tokens": 1032, "cost_usd": 0.026505, "timestamp": "2026-06-15T13:41:17"}
