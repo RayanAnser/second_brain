@@ -668,3 +668,7 @@
 {"timestamp": "2026-06-15T13:44:34", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 429, "output_tokens": 0, "cost_usd": 8.58e-06}
 {"timestamp": "2026-06-15T13:44:35", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 2662, "output_tokens": 0, "cost_usd": 5.324e-05}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "save_intelligently", "input_tokens": 11367, "output_tokens": 1196, "cost_usd": 0.027814, "timestamp": "2026-06-15T13:59:35"}
+{"timestamp": "2026-06-15T19:40:16", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 127, "output_tokens": 0, "cost_usd": 2.54e-06}
+{"timestamp": "2026-06-15T19:40:16", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 968, "output_tokens": 0, "cost_usd": 1.936e-05}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 662, "output_tokens": 40, "cost_usd": 0.001353, "timestamp": "2026-06-15T19:42:36"}
+{"service": "tavily", "model": "search", "function": "_find_urls_tavily", "requests": 1, "cost_usd": 0.0, "timestamp": "2026-06-15T19:42:38"}
