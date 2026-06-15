@@ -29,9 +29,6 @@
 - Crush sur Maya (capturé le 2026-05-23 — première présentation aux amis ce jour)
 - Aémilia (Emilia) : ex-petite copine ("grand-ex") _(2026-06-04)_
 
-## Réseau professionnel
-- Daniel : AI Engineer sur le projet Translation Factory _(2026-06-11)_
-
 ## Notes automatiques
 - est gaucher  _(jarvis, 2026-05-27)_
 - joue au ping-pong côté droitier  _(jarvis, 2026-05-27)_
