@@ -636,3 +636,4 @@
 {"timestamp": "2026-06-15T12:58:26", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 2662, "output_tokens": 0, "cost_usd": 5.324e-05}
 {"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 9, "cost_usd": 0.0001, "timestamp": "2026-06-15T13:36:58"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 698, "output_tokens": 48, "cost_usd": 0.001479, "timestamp": "2026-06-15T13:37:01"}
+{"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 5, "cost_usd": 5.6e-05, "timestamp": "2026-06-15T13:37:09"}
