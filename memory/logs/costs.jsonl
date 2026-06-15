@@ -565,3 +565,4 @@
 {"timestamp": "2026-06-15T12:45:38", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 429, "output_tokens": 0, "cost_usd": 8.58e-06}
 {"timestamp": "2026-06-15T12:45:38", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 2662, "output_tokens": 0, "cost_usd": 5.324e-05}
 {"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 6, "cost_usd": 6.7e-05, "timestamp": "2026-06-15T12:46:01"}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 681, "output_tokens": 32, "cost_usd": 0.001309, "timestamp": "2026-06-15T12:46:06"}
