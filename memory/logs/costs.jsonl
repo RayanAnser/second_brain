@@ -569,3 +569,4 @@
 {"timestamp": "2026-06-15T12:46:07", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 2, "output_tokens": 0, "cost_usd": 4e-08}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "ask_gemini", "input_tokens": 7282, "output_tokens": 133, "cost_usd": 0.01212, "timestamp": "2026-06-15T12:46:14"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "_extract_and_stage_memory", "input_tokens": 278, "output_tokens": 41, "cost_usd": 0.000786, "timestamp": "2026-06-15T12:46:19"}
+{"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 15, "cost_usd": 0.000167, "timestamp": "2026-06-15T12:46:47"}
