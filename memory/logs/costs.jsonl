@@ -574,3 +574,4 @@
 {"timestamp": "2026-06-15T12:46:53", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 63, "output_tokens": 0, "cost_usd": 1.26e-06}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "ask_gemini", "input_tokens": 7355, "output_tokens": 204, "cost_usd": 0.012868, "timestamp": "2026-06-15T12:46:59"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "_extract_and_stage_memory", "input_tokens": 379, "output_tokens": 121, "cost_usd": 0.001657, "timestamp": "2026-06-15T12:47:04"}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "save_intelligently", "input_tokens": 11870, "output_tokens": 1233, "cost_usd": 0.028902, "timestamp": "2026-06-15T12:47:26"}
