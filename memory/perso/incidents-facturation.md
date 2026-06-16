@@ -14,6 +14,4 @@
 - Vérifier le nombre de membres actifs sur le workspace
 - Contacter le support Notion si erreur/non voulu
 
-**Statut :** Non résolu (2026-05-22 18:01)
-
----
+**Statut :** En suspens (confirmé toujours non résolu le 2026-06-14)
