@@ -1343,3 +1343,4 @@
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 670, "output_tokens": 25, "cost_usd": 0.00123, "timestamp": "2026-06-16T15:53:27"}
 {"timestamp": "2026-06-16T15:53:27", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 19, "output_tokens": 0, "cost_usd": 3.8e-07}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "ask_gemini", "input_tokens": 7113, "output_tokens": 148, "cost_usd": 0.012002, "timestamp": "2026-06-16T15:53:38"}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "_extract_and_stage_memory", "input_tokens": 282, "output_tokens": 146, "cost_usd": 0.001737, "timestamp": "2026-06-16T15:53:43"}
