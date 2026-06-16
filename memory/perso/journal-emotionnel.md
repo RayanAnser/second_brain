@@ -1,7 +1,11 @@
 # Journal émotionnel
 
+## 2026-06-16 — Relation managériale tendue, démotivation sur le projet
+- **Relation difficile avec sa manager** : Ressent un manque de confiance flagrant. Ses avis en réunion sont dévalorisés, ses propositions sont ignorées et ses questions pour clarifier les zones d'ombre semblent être jugées négativement.
+- **Démotivation pro** : Se sent démotivé sur le projet à cause de ce manque de considération.
+
 ## 2026-06-11 — Surcharge mentale, Atelier impro & Traitement
-- **Surcharge et fatigue cumulée** : Sentiment de saturation mentale et de fatigue physique. Le séminaire d'entreprise actuel génère un manque total de motivation.
+- **Surcharge et fatigue cumulée** : Sentiment de saturation mentale et de fatigue physique. Le séminaire d'entreprise actuel génère un manque de motivation total.
 - **Appréhension atelier d'impro** : Stress lié à l'atelier d'impro de la semaine prochaine (aucun inscrit pour le moment), couplé à une baisse d'énergie.
 - **Anxiété pro (télétravail & éloignement)** : Grand stress concernant la future mission (éloignement géographique, absence de télétravail jugé indispensable). La motivation de fond reste l'achat de son appartement.
 - **Santé / Traitement** : Consommation d'anxiolytiques et d'antidépresseurs pour surmonter l'anxiété actuelle.
