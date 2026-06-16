@@ -1376,3 +1376,4 @@
 {"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 45, "cost_usd": 0.0005, "timestamp": "2026-06-16T17:59:08"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 862, "output_tokens": 87, "cost_usd": 0.002076, "timestamp": "2026-06-16T17:59:13"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "save_intelligently", "input_tokens": 11920, "output_tokens": 1553, "cost_usd": 0.031857, "timestamp": "2026-06-16T17:59:44"}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 666, "output_tokens": 36, "cost_usd": 0.001323, "timestamp": "2026-06-16T18:00:24"}
