@@ -2027,3 +2027,4 @@
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 697, "output_tokens": 41, "cost_usd": 0.001414, "timestamp": "2026-06-17T19:23:59"}
 {"timestamp": "2026-06-17T19:24:00", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 12, "output_tokens": 0, "cost_usd": 2.4e-07}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "ask_gemini", "input_tokens": 6908, "output_tokens": 389, "cost_usd": 0.013863, "timestamp": "2026-06-17T19:24:06"}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "_extract_and_stage_memory", "input_tokens": 550, "output_tokens": 30, "cost_usd": 0.001095, "timestamp": "2026-06-17T19:24:13"}
