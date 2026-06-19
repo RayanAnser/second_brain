@@ -3306,10 +3306,32 @@
 {"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 51, "cost_usd": 0.000567, "timestamp": "2026-06-19T17:19:44"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 838, "output_tokens": 84, "cost_usd": 0.002013, "timestamp": "2026-06-19T17:19:48"}
 {"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 46, "cost_usd": 0.000511, "timestamp": "2026-06-19T17:20:51"}
-{"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 860, "output_tokens": 102, "cost_usd": 0.002208, "timestamp": "2026-06-19T17:20:55"}
-{"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 10, "cost_usd": 0.000111, "timestamp": "2026-06-19T17:21:23"}
-{"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 687, "output_tokens": 36, "cost_usd": 0.001355, "timestamp": "2026-06-19T17:21:26"}
-{"timestamp": "2026-06-19T17:21:27", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 43, "output_tokens": 0, "cost_usd": 8.6e-07}
-{"service": "gemini", "model": "gemini-3.5-flash", "function": "ask_gemini", "input_tokens": 6698, "output_tokens": 86, "cost_usd": 0.010821, "timestamp": "2026-06-19T17:21:32"}
-{"service": "gemini", "model": "gemini-3.5-flash", "function": "_extract_and_stage_memory", "input_tokens": 237, "output_tokens": 80, "cost_usd": 0.001076, "timestamp": "2026-06-19T17:21:36"}
-{"service": "gemini", "model": "gemini-3.5-flash", "function": "save_intelligently", "input_tokens": 12318, "output_tokens": 1449, "cost_usd": 0.031518, "timestamp": "2026-06-19T17:21:56"}
+{"timestamp": "2026-06-19T17:22:40", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 250, "output_tokens": 0, "cost_usd": 5e-06}
+{"timestamp": "2026-06-19T17:22:40", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 187, "output_tokens": 0, "cost_usd": 3.74e-06}
+{"timestamp": "2026-06-19T17:22:40", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 1314, "output_tokens": 0, "cost_usd": 2.628e-05}
+{"timestamp": "2026-06-19T17:22:40", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 220, "output_tokens": 0, "cost_usd": 4.4e-06}
+{"timestamp": "2026-06-19T17:22:41", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 868, "output_tokens": 0, "cost_usd": 1.736e-05}
+{"timestamp": "2026-06-19T17:22:41", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 942, "output_tokens": 0, "cost_usd": 1.884e-05}
+{"timestamp": "2026-06-19T17:22:41", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 1278, "output_tokens": 0, "cost_usd": 2.556e-05}
+{"timestamp": "2026-06-19T17:22:42", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 1297, "output_tokens": 0, "cost_usd": 2.594e-05}
+{"timestamp": "2026-06-19T17:22:42", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 1856, "output_tokens": 0, "cost_usd": 3.712e-05}
+{"timestamp": "2026-06-19T17:22:42", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 977, "output_tokens": 0, "cost_usd": 1.954e-05}
+{"timestamp": "2026-06-19T17:22:43", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 1643, "output_tokens": 0, "cost_usd": 3.286e-05}
+{"timestamp": "2026-06-19T17:22:43", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 67, "output_tokens": 0, "cost_usd": 1.34e-06}
+{"timestamp": "2026-06-19T17:22:43", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 36, "output_tokens": 0, "cost_usd": 7.2e-07}
+{"timestamp": "2026-06-19T17:22:43", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 30, "output_tokens": 0, "cost_usd": 6e-07}
+{"timestamp": "2026-06-19T17:22:43", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 55, "output_tokens": 0, "cost_usd": 1.1e-06}
+{"timestamp": "2026-06-19T17:22:43", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 59, "output_tokens": 0, "cost_usd": 1.18e-06}
+{"timestamp": "2026-06-19T17:22:44", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 86, "output_tokens": 0, "cost_usd": 1.72e-06}
+{"timestamp": "2026-06-19T17:22:44", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 29, "output_tokens": 0, "cost_usd": 5.8e-07}
+{"timestamp": "2026-06-19T17:22:44", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 25, "output_tokens": 0, "cost_usd": 5e-07}
+{"timestamp": "2026-06-19T17:22:45", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 11, "output_tokens": 0, "cost_usd": 2.2e-07}
+{"timestamp": "2026-06-19T17:22:45", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 127, "output_tokens": 0, "cost_usd": 2.54e-06}
+{"timestamp": "2026-06-19T17:22:45", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 182, "output_tokens": 0, "cost_usd": 3.64e-06}
+{"timestamp": "2026-06-19T17:22:45", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 751, "output_tokens": 0, "cost_usd": 1.502e-05}
+{"timestamp": "2026-06-19T17:22:45", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 203, "output_tokens": 0, "cost_usd": 4.06e-06}
+{"timestamp": "2026-06-19T17:22:46", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 968, "output_tokens": 0, "cost_usd": 1.936e-05}
+{"timestamp": "2026-06-19T17:22:46", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 1208, "output_tokens": 0, "cost_usd": 2.416e-05}
+{"timestamp": "2026-06-19T17:22:46", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 429, "output_tokens": 0, "cost_usd": 8.58e-06}
+{"timestamp": "2026-06-19T17:22:46", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 2662, "output_tokens": 0, "cost_usd": 5.324e-05}
+{"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 30, "cost_usd": 0.000333, "timestamp": "2026-06-19T17:23:05"}
