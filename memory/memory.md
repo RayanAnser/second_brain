@@ -45,18 +45,21 @@
 ## Fils ouverts
 - Mardi 9 juin 17h : rendez-vous avec Ségolène
 - Vérifier cinéma "Fenêtres sur cour" à Paris
-- Sprint 7 (RAG SQLite) : prochaine étape roadmap
+- Sprint 7 (RAG SQLite) : Refonte de l'architecture en cours (sas de décompression)
 - Monitoring coûts API long terme : à mettre en place
-- acheter des chaussettes
-- acheter des courses
-- acheter des poirots
-- acheter de l'huile d'olive
-- acheter du ketchup
-- acheter ketchup et mayonnaise
-- acheter du pain
-- acheter de l'huile d'olive
+- Liste de courses unifiée : pain, poireaux, huile d'olive, ketchup, mayonnaise
 - Rendez-vous coiffeur jeudi 5 juin à 14h
 - Rendez-vous Navigo le 12 juin à 21h
+- Incident Notion à résoudre (96 € en suspens)
+
+## Mémoire auto
+- Rendez-vous avec Ségolène fixé au mardi 9 juin à 17h.  _(jarvis, 2026-05-28)_
+- Le prochain rendez-vous est avec Ség.  _(jarvis, 2026-05-28)_
+- Test IST mercredi ou jeudi la semaine prochaine
+- Projet de créer une intégration Mac personnalisée de l'assistant (Jarvis) pour Alice.  _(jarvis, 2026-06-02)_
+- Projet 'Alice Mac' : développement d'une interface hybride, sans terminal, avec accès aux données locales.  _(jarvis, 2026-06-02)_
+- L'utilisateur a le projet de créer un podcast sur les éléphants et souhaite y intégrer l'idée d'inviter des flamants roses.  _(jarvis, 2026-06-03)_
+- Le MVP du projet 'Compagnon IA' est finalisé à 95% ; les dernières étapes sont l'auto-amélioration sur desktop et l'adaptation Telegram.  _(jarvis, 2026-06-03)_
 
 ## Mémoire auto
 - Rendez-vous avec Ségolène fixé au mardi 9 juin à 17h.  _(jarvis, 2026-05-28)_
