@@ -3308,3 +3308,4 @@
 {"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 46, "cost_usd": 0.000511, "timestamp": "2026-06-19T17:20:51"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 860, "output_tokens": 102, "cost_usd": 0.002208, "timestamp": "2026-06-19T17:20:55"}
 {"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 10, "cost_usd": 0.000111, "timestamp": "2026-06-19T17:21:23"}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 687, "output_tokens": 36, "cost_usd": 0.001355, "timestamp": "2026-06-19T17:21:26"}
