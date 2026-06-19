@@ -1,9 +1,7 @@
 # Journal émotionnel
 
-## 2026-06-19 — Tensions naissantes avec Maya & refuge dans la technique
-- **Premières frictions avec Maya** : Maya exprime de l'agacement car elle a l'impression qu'il annule des plans au dernier moment. De son côté, Rayan se sent oppressé par une semaine très dense et un manque de temps pour lui.
-- **Gestion de la distance** : Un week-end entier ensemble se profile (samedi, dimanche, fête de la musique). Rayan réalise qu'il doit accepter et imposer de ne pas se voir en continu afin de préserver la relation et respirer.
-- **Refuge dans le code (RAG SQLite)** : Décision de refaire l'architecture RAG SQLite. Utilisation classique du refactoring technique comme zone de contrôle et thérapie pour décompresser face à la saturation personnelle.
+## 2026-06-19 — Semaine chargée, Improvisation & Banque
+- **Surcharge de la semaine** : Semaine intense et chargée, marquée par l'atelier d'improvisation et la préparation à la dernière minute d'un rendez-vous à la banque (probablement pour le projet d'achat d'appartement).
 
 ## 2026-06-16 — Relation managériale tendue, démotivation sur le projet
 - **Relation difficile avec sa manager** : Ressent un manque de confiance flagrant. Ses avis en réunion sont dévalorisés, ses propositions sont ignorées et ses questions pour clarifier les zones d'ombre semblent être jugées négativement.
@@ -22,5 +20,5 @@
 - **Contrecoup Emilia** : Fatigue générale accentuée par les émotions complexes liées à son ex-petite amie Emilia.
 
 ## 2026-06-07 — Retrouvailles complexes (Aémilia & Sam)
-- **Aémilia (Emilia)** : Profonde triste et sentiment de décalage bizarre. Impression de parler dans le vide face à elle.
+- **Aémilia (Emilia)** : Profonde tristesse et sentiment de décalage bizarre. Impression de parler dans le vide face à elle.
 - **Sam** : Sentiment de distance et de détachement lors des retrouvailles. Elle a un copain et semble moins s'intéresser à lui, ce qui génère de la tristesse.
