@@ -3304,3 +3304,4 @@
 {"timestamp": "2026-06-19T09:01:11", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 429, "output_tokens": 0, "cost_usd": 8.58e-06}
 {"timestamp": "2026-06-19T09:01:12", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 2662, "output_tokens": 0, "cost_usd": 5.324e-05}
 {"service": "groq_stt", "model": "whisper-large-v3", "function": "transcribe_voice", "duration_s": 51, "cost_usd": 0.000567, "timestamp": "2026-06-19T17:19:44"}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 838, "output_tokens": 84, "cost_usd": 0.002013, "timestamp": "2026-06-19T17:19:48"}
