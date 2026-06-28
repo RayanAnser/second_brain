@@ -9109,3 +9109,5 @@
 {"timestamp": "2026-06-28T09:01:03", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 2662, "output_tokens": 0, "cost_usd": 5.324e-05}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 1081, "output_tokens": 192, "cost_usd": 0.00335, "timestamp": "2026-06-28T10:16:40"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 655, "output_tokens": 25, "cost_usd": 0.001208, "timestamp": "2026-06-28T10:16:55"}
+{"timestamp": "2026-06-28T10:16:56", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 6, "output_tokens": 0, "cost_usd": 1.2e-07}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "ask_gemini", "input_tokens": 6861, "output_tokens": 105, "cost_usd": 0.011236, "timestamp": "2026-06-28T10:17:04"}
