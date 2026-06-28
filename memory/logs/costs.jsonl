@@ -9117,3 +9117,4 @@
 {"timestamp": "2026-06-28T10:17:47", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 164, "output_tokens": 0, "cost_usd": 3.28e-06}
 {"timestamp": "2026-06-28T10:17:48", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 981, "output_tokens": 0, "cost_usd": 1.962e-05}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 1101, "output_tokens": 166, "cost_usd": 0.003145, "timestamp": "2026-06-28T10:18:24"}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 1081, "output_tokens": 191, "cost_usd": 0.003341, "timestamp": "2026-06-28T10:18:30"}
