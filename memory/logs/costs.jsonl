@@ -9113,3 +9113,7 @@
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "ask_gemini", "input_tokens": 6861, "output_tokens": 105, "cost_usd": 0.011236, "timestamp": "2026-06-28T10:17:04"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "_extract_and_stage_memory", "input_tokens": 223, "output_tokens": 74, "cost_usd": 0.001001, "timestamp": "2026-06-28T10:17:07"}
 {"service": "gemini", "model": "gemini-3.5-flash", "function": "save_intelligently", "input_tokens": 12659, "output_tokens": 747, "cost_usd": 0.025712, "timestamp": "2026-06-28T10:17:33"}
+{"timestamp": "2026-06-28T10:17:46", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 155, "output_tokens": 0, "cost_usd": 3.1e-06}
+{"timestamp": "2026-06-28T10:17:47", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 164, "output_tokens": 0, "cost_usd": 3.28e-06}
+{"timestamp": "2026-06-28T10:17:48", "service": "openai_embed", "model": "text-embedding-3-small", "function": "_embed", "input_tokens": 981, "output_tokens": 0, "cost_usd": 1.962e-05}
+{"service": "gemini", "model": "gemini-3.5-flash", "function": "classify_intent", "input_tokens": 1101, "output_tokens": 166, "cost_usd": 0.003145, "timestamp": "2026-06-28T10:18:24"}
